@@ -11,13 +11,14 @@ import (
 
 const (
 	telegramUpdatesCheckBGSync = "telegramUpdatesCheck_BGSync"
+	pingCommand                = "/ping"
 )
 
 type TelegramUpdatesCheckService struct {
 }
 
-func NewTelegramUpdatesCheckService() *TelegramUpdatesCheckService {
-	return &TelegramUpdatesCheckService{}
+func NewTelegramUpdatesCheckService() (*TelegramUpdatesCheckService, error) {
+	return &TelegramUpdatesCheckService{}, nil
 }
 
 func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
@@ -40,10 +41,13 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 		if updateInfo.Message != nil {
 			logrus.Printf("[%s] %s", updateInfo.Message.From.UserName, updateInfo.Message.Text)
 
-			msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, updateInfo.Message.Text)
-			msg.ReplyToMessageID = updateInfo.Message.MessageID
+			if updateInfo.Message.Text == pingCommand {
+				msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "pong")
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
-			bot.Send(msg)
+				bot.Send(msg)
+			}
+
 		}
 	}
 

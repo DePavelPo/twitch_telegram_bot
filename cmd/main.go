@@ -1,9 +1,12 @@
 package main
 
 import (
-	"log"
+	"context"
 	"net/http"
 	"time"
+
+	teleUpdatesCheckService "twitch_telegram_bot/internal/service/telegram_updates_check"
+
 	telegreamClient "twitch_telegram_bot/internal/client/telegram-client"
 	telegramHandler "twitch_telegram_bot/internal/handlers/telegram"
 	telegramService "twitch_telegram_bot/internal/service/telegram"
@@ -14,12 +17,18 @@ import (
 )
 
 func main() {
-	// ctx := context.Background()
+	ctx := context.Background()
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		logrus.Fatal("Error loading .env file")
 	}
+
+	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService()
+	if err != nil {
+		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
+	}
+	go tucs.SyncBg(ctx, time.Hour*1)
 
 	var (
 		telegaClient = telegreamClient.NewTelegramClient()
@@ -42,5 +51,5 @@ func main() {
 		ReadTimeout:  5 * time.Second,
 	}
 
-	log.Fatal(srv.ListenAndServe())
+	logrus.Fatal(srv.ListenAndServe())
 }
