@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
 	}
-	go tucs.SyncBg(ctx, time.Hour*1)
+	go tucs.SyncBg(ctx, time.Second*1)
 
 	var (
 		telegaClient = telegreamClient.NewTelegramClient()

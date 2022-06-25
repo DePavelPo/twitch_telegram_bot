@@ -2,8 +2,10 @@ package telegram_updates_check
 
 import (
 	"context"
+	"math/rand"
 	"os"
 	"time"
+	"twitch_telegram_bot/internal/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
@@ -12,6 +14,7 @@ import (
 const (
 	telegramUpdatesCheckBGSync = "telegramUpdatesCheck_BGSync"
 	pingCommand                = "/ping"
+	jokeCommand                = "/anec"
 )
 
 type TelegramUpdatesCheckService struct {
@@ -41,12 +44,18 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 		if updateInfo.Message != nil {
 			logrus.Printf("[%s] %s", updateInfo.Message.From.UserName, updateInfo.Message.Text)
 
-			if updateInfo.Message.Text == pingCommand {
-				msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "pong")
+			msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "")
+			switch updateInfo.Message.Text {
+			case pingCommand:
+				msg.Text = "pong"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
-				bot.Send(msg)
+			case jokeCommand:
+				rand.Seed(time.Now().UnixNano())
+				msg.Text = models.JokeList[rand.Intn(len(models.JokeList))]
 			}
+
+			bot.Send(msg)
 
 		}
 	}
