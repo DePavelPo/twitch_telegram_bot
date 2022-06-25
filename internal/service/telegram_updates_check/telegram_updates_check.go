@@ -40,6 +40,8 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 	updates := bot.GetUpdatesChan(reader)
 
+	// TODO: сделать так, чтобы при включении бота не реагировать на каждое скопившееся сообщение
+
 	for updateInfo := range updates {
 		if updateInfo.Message != nil {
 			logrus.Printf("[%s] %s", updateInfo.Message.From.UserName, updateInfo.Message.Text)
