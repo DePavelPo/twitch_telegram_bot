@@ -31,6 +31,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 		return err
 	}
 
+	// TODO: проверить без флага
 	bot.Debug = true
 
 	logrus.Printf("Authorized on account %s", bot.Self.UserName)
@@ -40,11 +41,18 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 	updates := bot.GetUpdatesChan(reader)
 
-	// TODO: сделать так, чтобы при включении бота не реагировать на каждое скопившееся сообщение
-
 	for updateInfo := range updates {
 		if updateInfo.Message != nil {
 			logrus.Printf("[%s] %s", updateInfo.Message.From.UserName, updateInfo.Message.Text)
+
+			timeAndZone := time.Unix(int64(updateInfo.Message.Date), 0)
+
+			// TODO: если прошло много времени - отправить сообщение о включении (без дубликации!)
+			if timeAndZone.Add(time.Second * 10).Before(time.Now()) {
+				// TODO: более подробный лог
+				logrus.Print("skip reason: old time")
+				continue
+			}
 
 			msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "")
 			switch updateInfo.Message.Text {
