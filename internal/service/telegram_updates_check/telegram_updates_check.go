@@ -31,7 +31,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 		return err
 	}
 
-	// TODO: проверить без флага
+	// для подробных логов
 	bot.Debug = true
 
 	logrus.Printf("Authorized on account %s", bot.Self.UserName)
@@ -47,14 +47,21 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			timeAndZone := time.Unix(int64(updateInfo.Message.Date), 0)
 
-			// TODO: если прошло много времени - отправить сообщение о включении (без дубликации!)
-			if timeAndZone.Add(time.Second * 10).Before(time.Now()) {
-				// TODO: более подробный лог
-				logrus.Print("skip reason: old time")
+			msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "")
+
+			timeNow := time.Now()
+			// TODO: подумать, как избежать дубликации ответа
+			if timeAndZone.Add(time.Second * 10).Before(timeNow) {
+
+				msg.Text = "Прошу прощения, я немного вздремнул ☺️ . Теперь я пробудился и готов к работе! 😎 "
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+
+				bot.Send(msg)
+
+				logrus.Printf("skip reason: old time. User %s, message time %s, time now %s", updateInfo.Message.From.UserName, timeAndZone, timeNow)
 				continue
 			}
 
-			msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "")
 			switch updateInfo.Message.Text {
 			case pingCommand:
 				msg.Text = "pong"
