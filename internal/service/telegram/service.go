@@ -1,4 +1,4 @@
-package telegram
+package telegram_service
 
 import (
 	telegreamClient "twitch_telegram_bot/internal/client/telegram-client"

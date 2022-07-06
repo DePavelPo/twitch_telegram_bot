@@ -1,4 +1,4 @@
-package telegram
+package twitch_handler
 
 import (
 	"net/http"
@@ -12,11 +12,11 @@ type Response struct {
 	Error string      `json:"error"`
 }
 
-func (h *TelegramHandler) GetBotData(w http.ResponseWriter, r *http.Request) {
+func (twh *TwitchHandler) GetOAuthToken(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	res, err := h.telegramService.GetBotData(ctx)
+	res, err := twh.twitchService.GetOAuthToken(ctx)
 	if err != nil {
 		logrus.Error(err)
 		WriteErrorResponse(w, r, http.StatusInternalServerError, err.Error())
@@ -31,8 +31,8 @@ func WriteSuccessData(w http.ResponseWriter, r *http.Request, data interface{}) 
 	_ = jsoniter.NewEncoder(w).Encode(Response{
 		Data: data,
 	})
-	w.WriteHeader(200)
 
+	w.WriteHeader(200)
 }
 
 // TODO: moved to another package
@@ -40,6 +40,6 @@ func WriteErrorResponse(w http.ResponseWriter, r *http.Request, errCode int, err
 	_ = jsoniter.NewEncoder(w).Encode(Response{
 		Error: err,
 	})
-	w.WriteHeader(errCode)
 
+	w.WriteHeader(errCode)
 }

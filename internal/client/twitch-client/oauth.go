@@ -2,10 +2,13 @@ package twitch_client
 
 import (
 	"context"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
 	"twitch_telegram_bot/internal/models"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 type TwitchClient struct {
@@ -15,7 +18,7 @@ func NewTwitchClient() *TwitchClient {
 	return &TwitchClient{}
 }
 
-func (twc *TwitchClient) TwitchOath(ctx context.Context) (data *models.TwitchOathResponse, err error) {
+func (twc *TwitchClient) TwitchOAuth(ctx context.Context) (data *models.TwitchOathResponse, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -29,17 +32,30 @@ func (twc *TwitchClient) TwitchOath(ctx context.Context) (data *models.TwitchOat
 	query := req.URL.Query()
 	query.Add("client_id", os.Getenv("TWITCH_CLIENT_ID"))
 	query.Add("client_secret", os.Getenv("TWITCH_SECRET"))
-	query.Add("grant_type", os.Getenv("client_credentials"))
+	query.Add("grant_type", "client_credentials")
 	req.URL.RawQuery = query.Encode()
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
-	if resp != nil {
+	if err != nil {
 		return
 	}
 
 	defer resp.Body.Close()
+
+	readedResp, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+
+	var tokenInfo models.TwitchOathResponse
+	err = jsoniter.Unmarshal(readedResp, &tokenInfo)
+	if err != nil {
+		return
+	}
+
+	data = &tokenInfo
 
 	return
 }
