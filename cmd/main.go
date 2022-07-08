@@ -52,6 +52,7 @@ func main() {
 
 	// TODO: add handle with return twitch user info, after connect with telegram req
 	router.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
+	router.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
 
 	logrus.Info("server start...")
 

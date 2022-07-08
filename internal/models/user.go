@@ -2,6 +2,10 @@ package models
 
 import "time"
 
+type GetUserInfoReq struct {
+	ID string `json:"id"`
+}
+
 type GetUserInfoResponse struct {
 	Data []TwitchUserInfo `json:"data"`
 }
