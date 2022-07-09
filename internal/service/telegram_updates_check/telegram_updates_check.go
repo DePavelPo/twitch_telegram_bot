@@ -62,6 +62,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				continue
 			}
 
+			// TODO: добавить кейс с получение информации о твитч пользователе
 			switch updateInfo.Message.Text {
 			case pingCommand:
 				msg.Text = "pong"

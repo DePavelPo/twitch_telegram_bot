@@ -50,6 +50,21 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []st
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized {
+			readedResp, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+
+			var unauthorizedResp models.GetUserUnauthorized
+			err = jsoniter.Unmarshal(readedResp, &unauthorizedResp)
+			if err != nil {
+				return nil, err
+			}
+
+			return nil, errors.New(unauthorizedResp.Message)
+		}
+
 		return nil, errors.Errorf("get twitch users failed with status code: %d", resp.StatusCode)
 	}
 
