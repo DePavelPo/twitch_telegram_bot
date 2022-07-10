@@ -29,16 +29,16 @@ func main() {
 		logrus.Fatal("Error loading .env file")
 	}
 
-	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService()
-	if err != nil {
-		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
-	}
-	go tucs.SyncBg(ctx, time.Second*1)
-
 	var (
 		telegaClient = telegramClient.NewTelegramClient()
 		twitchClient = twitchClient.NewTwitchClient()
 	)
+
+	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient)
+	if err != nil {
+		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
+	}
+	go tucs.SyncBg(ctx, time.Second*1)
 
 	telegaService := telegramService.NewService(telegaClient)
 	twitchService := twitchService.NewService(twitchClient)

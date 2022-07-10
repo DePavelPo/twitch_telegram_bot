@@ -2,10 +2,14 @@ package telegram_updates_check
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 	"twitch_telegram_bot/internal/models"
+
+	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
@@ -15,13 +19,17 @@ const (
 	telegramUpdatesCheckBGSync = "telegramUpdatesCheck_BGSync"
 	pingCommand                = "/ping"
 	jokeCommand                = "/anec"
+	twitchUserCommand          = "/twitch_user"
 )
 
 type TelegramUpdatesCheckService struct {
+	twitchClient *twitch_client.TwitchClient
 }
 
-func NewTelegramUpdatesCheckService() (*TelegramUpdatesCheckService, error) {
-	return &TelegramUpdatesCheckService{}, nil
+func NewTelegramUpdatesCheckService(twitchClient *twitch_client.TwitchClient) (*TelegramUpdatesCheckService, error) {
+	return &TelegramUpdatesCheckService{
+		twitchClient: twitchClient,
+	}, nil
 }
 
 func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
@@ -51,7 +59,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			timeNow := time.Now()
 			// TODO: подумать, как избежать дубликации ответа
-			if timeAndZone.Add(time.Second * 10).Before(timeNow) {
+			if timeAndZone.Add(time.Second * 12).Before(timeNow) {
 
 				msg.Text = "Прошу прощения, я немного вздремнул ☺️ . Теперь я пробудился и готов к работе! 😎 "
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
@@ -62,19 +70,40 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				continue
 			}
 
-			// TODO: добавить кейс с получение информации о твитч пользователе
-			switch updateInfo.Message.Text {
-			case pingCommand:
+			// расширять функционал
+			switch {
+			case strings.HasPrefix(updateInfo.Message.Text, pingCommand):
 				msg.Text = "pong"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
-			case jokeCommand:
+			case strings.HasPrefix(updateInfo.Message.Text, jokeCommand):
 				rand.Seed(time.Now().UnixNano())
 				msg.Text = models.JokeList[rand.Intn(len(models.JokeList))]
+
+			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
+				user := updateInfo.Message.Text[len(fmt.Sprintf("%s ", twitchUserCommand)):]
+				userInfo, err := tmcs.twitchClient.GetUserInfo(ctx, os.Getenv("TWITCH_BEARER"), []string{user})
+				if err != nil {
+					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				// TODO: поресерчить корректность перевода времени на корректную временную зону
+				location := time.Now().Location()
+				// TODO: сделать отдельную переменную под createdAt
+				userInfo.Data[0].CreatedAt.In(location)
+
+				// TODO: подкорректировать отображение
+				msg.Text = fmt.Sprintf(
+					`Пользователь: %s
+				Дата создания аккаунта: %s
+				%s
+				`, userInfo.Data[0].DisplayName, userInfo.Data[0].CreatedAt.Format("2006.02.01 15:04:05"), fmt.Sprintf("https://www.twitch.tv/%s", userInfo.Data[0].Login))
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
 			}
 
 			bot.Send(msg)
-
 		}
 	}
 
