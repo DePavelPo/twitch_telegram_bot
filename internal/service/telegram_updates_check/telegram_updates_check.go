@@ -81,25 +81,27 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg.Text = models.JokeList[rand.Intn(len(models.JokeList))]
 
 			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
-				user := updateInfo.Message.Text[len(fmt.Sprintf("%s ", twitchUserCommand)):]
-				userInfo, err := tmcs.twitchClient.GetUserInfo(ctx, os.Getenv("TWITCH_BEARER"), []string{user})
+				userLogin := updateInfo.Message.Text[len(fmt.Sprintf("%s ", twitchUserCommand)):]
+				users, err := tmcs.twitchClient.GetUserInfo(ctx, os.Getenv("TWITCH_BEARER"), []string{userLogin})
 				if err != nil {
 					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
-				// TODO: поресерчить корректность перевода времени на корректную временную зону
-				location := time.Now().Location()
-				// TODO: сделать отдельную переменную под createdAt
-				userInfo.Data[0].CreatedAt.In(location)
+				user := users.Data[0]
+				accCreatedTime := user.CreatedAt
+
+				// отображаем по МСК
+				location := time.FixedZone("MSK", 3*60*60)
+				accCreatedTime = accCreatedTime.In(location)
 
 				// TODO: подкорректировать отображение
-				msg.Text = fmt.Sprintf(
-					`Пользователь: %s
+				msg.Text = fmt.Sprintf(`
+				Пользователь: %s
 				Дата создания аккаунта: %s
 				%s
-				`, userInfo.Data[0].DisplayName, userInfo.Data[0].CreatedAt.Format("2006.02.01 15:04:05"), fmt.Sprintf("https://www.twitch.tv/%s", userInfo.Data[0].Login))
+				`, user.DisplayName, accCreatedTime.Format("2006.02.01 15:04:05"), fmt.Sprintf("https://www.twitch.tv/%s", user.Login))
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 			}
 
