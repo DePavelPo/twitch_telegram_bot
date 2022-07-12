@@ -70,7 +70,9 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				continue
 			}
 
-			// расширять функционал
+			// TODO: добавить валидацию
+
+			// TODO: расширять функционал
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, pingCommand):
 				msg.Text = "pong"
@@ -80,6 +82,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				rand.Seed(time.Now().UnixNano())
 				msg.Text = models.JokeList[rand.Intn(len(models.JokeList))]
 
+			// TODO: унести в отдельную функцию
 			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
 				userLogin := updateInfo.Message.Text[len(fmt.Sprintf("%s ", twitchUserCommand)):]
 				users, err := tmcs.twitchClient.GetUserInfo(ctx, os.Getenv("TWITCH_BEARER"), []string{userLogin})
@@ -96,12 +99,46 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				location := time.FixedZone("MSK", 3*60*60)
 				accCreatedTime = accCreatedTime.In(location)
 
+				var userType string
+				switch user.Type {
+				case "staff":
+					userType = "сотрудник твича"
+					break
+				case "admin":
+					userType = "админ твича"
+					break
+				case "global_mod":
+					userType = "глобальный администратор"
+					break
+				default:
+					userType = "пользователь"
+				}
+
+				var userBroadcasterType string
+				switch user.BroadcasterType {
+				case "partner":
+					userBroadcasterType = "партнер"
+					break
+				case "affiliate":
+					userBroadcasterType = "компаньон"
+					break
+				default:
+					userBroadcasterType = "пользователь"
+				}
+
 				// TODO: подкорректировать отображение
-				msg.Text = fmt.Sprintf(`
-				Пользователь: %s
+				msg.Text = fmt.Sprintf(`Пользователь: %s
 				Дата создания аккаунта: %s
+				Тип пользователя: %s
+				Тип стримера: %s
 				%s
-				`, user.DisplayName, accCreatedTime.Format("2006.02.01 15:04:05"), fmt.Sprintf("https://www.twitch.tv/%s", user.Login))
+				`,
+					user.DisplayName,
+					accCreatedTime.Format("2006.02.01 15:04:05"),
+					userType,
+					userBroadcasterType,
+					fmt.Sprintf("https://www.twitch.tv/%s", user.Login))
+
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 			}
 
