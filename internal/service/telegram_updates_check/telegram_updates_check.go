@@ -84,8 +84,16 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			// TODO: унести в отдельную функцию
 			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
-				userLogin := updateInfo.Message.Text[len(fmt.Sprintf("%s ", twitchUserCommand)):]
-				users, err := tmcs.twitchClient.GetUserInfo(ctx, os.Getenv("TWITCH_BEARER"), []string{userLogin})
+				commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchUserCommand)):]
+
+				userLogin, isValid := validateText(commandText)
+				if userLogin == nil || !isValid {
+					msg.Text = "Не корректно составленный запрос, повторите попытку"
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				users, err := tmcs.twitchClient.GetUserInfo(ctx, os.Getenv("TWITCH_BEARER"), []string{*userLogin})
 				if err != nil {
 					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
@@ -169,4 +177,15 @@ func (tmcs *TelegramUpdatesCheckService) SyncBg(ctx context.Context, syncInterva
 		}
 	}
 
+}
+
+func validateText(text string) (str *string, isValid bool) {
+
+	words := strings.Fields(text)
+
+	if len(words) != 1 {
+		return nil, false
+	}
+
+	return &words[0], true
 }
