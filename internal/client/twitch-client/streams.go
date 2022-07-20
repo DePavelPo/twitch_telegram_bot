@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"regexp"
 	"time"
 	"twitch_telegram_bot/internal/models"
 
@@ -14,16 +13,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-var digitCheck = regexp.MustCompile(`^[0-9]+$`) // check if have only digits
-
-// TODO: запрос не возвращает инфу по несуществующему пользователю
-func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []string) (data *models.GetUserInfoResponse, err error) {
+func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, token string, ids []string) (data *models.Streams, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", "https://api.twitch.tv/helix/users", nil)
+	req, err := http.NewRequest("GET", "https://api.twitch.tv/helix/streams", nil)
 	if err != nil {
 		return
 	}
@@ -31,10 +27,10 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []st
 	query := req.URL.Query()
 	for _, id := range ids {
 		if digitCheck.MatchString(id) {
-			query.Add("id", id)
+			query.Add("user_id", id)
 			continue
 		}
-		query.Add("login", id)
+		query.Add("user_login", id)
 	}
 	req.URL.RawQuery = query.Encode()
 
@@ -64,7 +60,7 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []st
 			return nil, errors.New(unauthorizedResp.Message)
 		}
 
-		return nil, errors.Errorf("get twitch users failed with status code: %d", resp.StatusCode)
+		return nil, errors.Errorf("get twitch streams failed with status code: %d", resp.StatusCode)
 	}
 
 	readedResp, err := ioutil.ReadAll(resp.Body)
@@ -72,13 +68,13 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []st
 		return
 	}
 
-	var usersInfo models.GetUserInfoResponse
-	err = jsoniter.Unmarshal(readedResp, &usersInfo)
+	var streamsInfo models.Streams
+	err = jsoniter.Unmarshal(readedResp, &streamsInfo)
 	if err != nil {
 		return
 	}
 
-	data = &usersInfo
+	data = &streamsInfo
 
 	return
 }
