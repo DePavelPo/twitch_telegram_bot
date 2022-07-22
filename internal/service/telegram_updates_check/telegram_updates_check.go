@@ -59,7 +59,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			timeNow := time.Now()
 			// TODO: подумать, как избежать дубликации ответа
-			if timeAndZone.Add(time.Second * 12).Before(timeNow) {
+			if timeAndZone.Add(time.Second * 15).Before(timeNow) {
 
 				msg.Text = "Прошу прощения, я немного вздремнул ☺️ . Теперь я пробудился и готов к работе! 😎 "
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
@@ -77,77 +77,20 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			case strings.HasPrefix(updateInfo.Message.Text, pingCommand):
 				msg.Text = "pong"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, jokeCommand):
 				rand.Seed(time.Now().UnixNano())
-				msg.Text = models.JokeList[rand.Intn(len(models.JokeList))]
+				msg.Text = fmt.Sprintf(`
+				Внимание, анекдот!
+				
+				%s`,
+					models.JokeList[rand.Intn(len(models.JokeList))])
+				break
 
 			// TODO: унести в отдельную функцию
 			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
-				commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchUserCommand)):]
-
-				userLogin, isValid := validateText(commandText)
-				if userLogin == nil || !isValid {
-					msg.Text = "Не корректно составленный запрос, повторите попытку"
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					break
-				}
-
-				users, err := tmcs.twitchClient.GetUserInfo(ctx, os.Getenv("TWITCH_BEARER"), []string{*userLogin})
-				if err != nil {
-					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					break
-				}
-
-				user := users.Data[0]
-				accCreatedTime := user.CreatedAt
-
-				// отображаем по МСК
-				location := time.FixedZone("MSK", 3*60*60)
-				accCreatedTime = accCreatedTime.In(location)
-
-				var userType string
-				switch user.Type {
-				case "staff":
-					userType = "сотрудник твича"
-					break
-				case "admin":
-					userType = "админ твича"
-					break
-				case "global_mod":
-					userType = "глобальный администратор"
-					break
-				default:
-					userType = "пользователь"
-				}
-
-				var userBroadcasterType string
-				switch user.BroadcasterType {
-				case "partner":
-					userBroadcasterType = "партнер"
-					break
-				case "affiliate":
-					userBroadcasterType = "компаньон"
-					break
-				default:
-					userBroadcasterType = "пользователь"
-				}
-
-				// TODO: подкорректировать отображение
-				msg.Text = fmt.Sprintf(`Пользователь: %s
-				Дата создания аккаунта: %s
-				Тип пользователя: %s
-				Тип стримера: %s
-				%s
-				`,
-					user.DisplayName,
-					accCreatedTime.Format("2006.02.01 15:04:05"),
-					userType,
-					userBroadcasterType,
-					fmt.Sprintf("https://www.twitch.tv/%s", user.Login))
-
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				msg = tmcs.TwitchUserCase(ctx, msg, updateInfo)
 			}
 
 			bot.Send(msg)
