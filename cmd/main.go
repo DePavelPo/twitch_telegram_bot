@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 	"time"
 
 	teleUpdatesCheckService "twitch_telegram_bot/internal/service/telegram_updates_check"
@@ -17,8 +18,11 @@ import (
 	twitchService "twitch_telegram_bot/internal/service/twitch"
 
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -27,6 +31,16 @@ func main() {
 	err := godotenv.Load()
 	if err != nil {
 		logrus.Fatal("Error loading .env file")
+	}
+
+	db, err := sqlx.Connect("postgres", os.Getenv("DB_CONN"))
+	if err != nil {
+		logrus.Fatalf("cannot connect to db: %v", err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		logrus.Fatalf("cannot ping db: %v", err)
 	}
 
 	var (
