@@ -20,6 +20,7 @@ const (
 	pingCommand                = "/ping"
 	jokeCommand                = "/anec"
 	twitchUserCommand          = "/twitch_user"
+	twitchBanTest              = "/twitch_ban_test"
 )
 
 type TelegramUpdatesCheckService struct {
@@ -72,7 +73,9 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			// TODO: добавить валидацию
 
+			rand.Seed(time.Now().UnixNano())
 			// TODO: расширять функционал
+			// TODO: рандомайз на шанс быть забаненным на твиче
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, pingCommand):
 				msg.Text = "pong"
@@ -80,7 +83,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, jokeCommand):
-				rand.Seed(time.Now().UnixNano())
+
 				msg.Text = fmt.Sprintf(`
 				Внимание, анекдот!
 				
@@ -88,7 +91,34 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					models.JokeList[rand.Intn(len(models.JokeList))])
 				break
 
-			// TODO: унести в отдельную функцию
+			case strings.HasPrefix(updateInfo.Message.Text, twitchBanTest):
+				var emote string
+
+				chance := rand.Intn(101)
+				switch {
+				case chance == 0:
+					emote = "😩"
+					break
+				case chance > 0 && chance <= 25:
+					emote = "🤔"
+					break
+				case chance > 25 && chance <= 50:
+					emote = "😮"
+					break
+				case chance > 50 && chance <= 75:
+					emote = "😃"
+					break
+				case chance > 75 && chance <= 99:
+					emote = "🤯"
+					break
+				default:
+					emote = "😎"
+				}
+
+				msg.Text = fmt.Sprintf("Твой шанс быть забанненым на твиче = %d%% %s", chance, emote)
+
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+
 			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
 				msg = tmcs.TwitchUserCase(ctx, msg, updateInfo)
 			}
