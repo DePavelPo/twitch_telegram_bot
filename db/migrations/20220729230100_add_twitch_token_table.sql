@@ -3,7 +3,7 @@
 create table twitch_tokens
 (
     id bigserial not null primary key,
-    token text not null,
+    token text not null unique,
     is_expired boolean default false not null,
     created_at timestamp with time zone default now() not null,
     updated_at timestamp with time zone default now() not null
