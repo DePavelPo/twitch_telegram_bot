@@ -22,7 +22,7 @@ func NewTwitchClient() *TwitchClient {
 	return &TwitchClient{}
 }
 
-func (twc *TwitchClient) TwitchOAuthGetToken(ctx context.Context) (data *models.TwitchOatGetTokenhResponse, err error) {
+func (twc *TwitchClient) TwitchOAuthGetToken(ctx context.Context) (data *models.TwitchOautGetTokenResponse, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -53,7 +53,7 @@ func (twc *TwitchClient) TwitchOAuthGetToken(ctx context.Context) (data *models.
 		return
 	}
 
-	var tokenInfo models.TwitchOatGetTokenhResponse
+	var tokenInfo models.TwitchOautGetTokenResponse
 	err = jsoniter.Unmarshal(readedResp, &tokenInfo)
 	if err != nil {
 		return
@@ -64,7 +64,7 @@ func (twc *TwitchClient) TwitchOAuthGetToken(ctx context.Context) (data *models.
 	return
 }
 
-func (twc *TwitchClient) TwitchOAuthValidateToken(ctx context.Context, token string) (data *models.TwitchOatValidateTokenhResponse, err error) {
+func (twc *TwitchClient) TwitchOAuthValidateToken(ctx context.Context, token string) (data *models.TwitchOautValidateTokenResponse, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -104,7 +104,7 @@ func (twc *TwitchClient) TwitchOAuthValidateToken(ctx context.Context, token str
 		return nil, errors.Errorf("get twitch streams failed with status code: %d", resp.StatusCode)
 	}
 
-	var validateTokenInfo models.TwitchOatValidateTokenhResponse
+	var validateTokenInfo models.TwitchOautValidateTokenResponse
 	err = jsoniter.Unmarshal(readedResp, &validateTokenInfo)
 	if err != nil {
 		return

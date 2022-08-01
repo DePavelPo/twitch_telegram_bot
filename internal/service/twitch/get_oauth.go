@@ -5,6 +5,6 @@ import (
 	"twitch_telegram_bot/internal/models"
 )
 
-func (tws *TwitchService) GetOAuthToken(ctx context.Context) (*models.TwitchOatGetTokenhResponse, error) {
+func (tws *TwitchService) GetOAuthToken(ctx context.Context) (*models.TwitchOautGetTokenResponse, error) {
 	return tws.twitchClient.TwitchOAuthGetToken(ctx)
 }

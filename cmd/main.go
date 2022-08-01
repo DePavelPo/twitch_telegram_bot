@@ -8,6 +8,8 @@ import (
 
 	teleUpdatesCheckService "twitch_telegram_bot/internal/service/telegram_updates_check"
 
+	twitchTokenService "twitch_telegram_bot/internal/service/twitch_token"
+
 	telegramClient "twitch_telegram_bot/internal/client/telegram-client"
 	twitchClient "twitch_telegram_bot/internal/client/twitch-client"
 
@@ -47,6 +49,12 @@ func main() {
 		telegaClient = telegramClient.NewTelegramClient()
 		twitchClient = twitchClient.NewTwitchClient()
 	)
+
+	tts, err := twitchTokenService.NewTwitchTokenService(db, twitchClient)
+	if err != nil {
+		logrus.Fatalf("cannot init twitchTokenService: %v", err)
+	}
+	go tts.SyncBg(ctx, time.Second*10)
 
 	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient)
 	if err != nil {

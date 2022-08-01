@@ -1,12 +1,12 @@
 package models
 
-type TwitchOatGetTokenhResponse struct {
+type TwitchOautGetTokenResponse struct {
 	Token     string `json:"access_token"`
 	ExpiresIn uint64 `json:"expires_in"`
 	TokenType string `json:"token_type"`
 }
 
-type TwitchOatValidateTokenhResponse struct {
+type TwitchOautValidateTokenResponse struct {
 	ClientId  string   `json:"client_id"`
 	Login     string   `json:"login"`
 	Scopes    []string `json:"scopes"`
