@@ -75,7 +75,6 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			rand.Seed(time.Now().UnixNano())
 			// TODO: расширять функционал
-			// TODO: рандомайз на шанс быть забаненным на твиче
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, pingCommand):
 				msg.Text = "pong"

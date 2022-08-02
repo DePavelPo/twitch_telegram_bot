@@ -1,4 +1,4 @@
-package twitch_client
+package twitch_oath_client
 
 import (
 	"context"
@@ -13,22 +13,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-const twitchSchemeHost string = "https://id.twitch.tv"
+const twitchIdSchemeHost string = "https://id.twitch.tv"
 
-type TwitchClient struct {
+type TwitchOauthClient struct {
 }
 
-func NewTwitchClient() *TwitchClient {
-	return &TwitchClient{}
+func NewTwitchOauthClient() *TwitchOauthClient {
+	return &TwitchOauthClient{}
 }
 
-func (twc *TwitchClient) TwitchOAuthGetToken(ctx context.Context) (data *models.TwitchOautGetTokenResponse, err error) {
+func (twc *TwitchOauthClient) TwitchOAuthGetToken(ctx context.Context) (data *models.TwitchOautGetTokenResponse, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("POST", twitchSchemeHost+"/oauth2/token", nil)
+	req, err := http.NewRequest("POST", twitchIdSchemeHost+"/oauth2/token", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -64,13 +64,13 @@ func (twc *TwitchClient) TwitchOAuthGetToken(ctx context.Context) (data *models.
 	return
 }
 
-func (twc *TwitchClient) TwitchOAuthValidateToken(ctx context.Context, token string) (data *models.TwitchOautValidateTokenResponse, err error) {
+func (twc *TwitchOauthClient) TwitchOAuthValidateToken(ctx context.Context, token string) (data *models.TwitchOautValidateTokenResponse, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", twitchSchemeHost+"/oauth2/validate", nil)
+	req, err := http.NewRequest("GET", twitchIdSchemeHost+"/oauth2/validate", nil)
 	if err != nil {
 		return nil, err
 	}

@@ -12,6 +12,7 @@ import (
 
 	telegramClient "twitch_telegram_bot/internal/client/telegram-client"
 	twitchClient "twitch_telegram_bot/internal/client/twitch-client"
+	twitchOauthClient "twitch_telegram_bot/internal/client/twitch-oauth-client"
 
 	telegramHandler "twitch_telegram_bot/internal/handlers/telegram"
 	twitchHandler "twitch_telegram_bot/internal/handlers/twitch"
@@ -46,15 +47,17 @@ func main() {
 	}
 
 	var (
-		telegaClient = telegramClient.NewTelegramClient()
-		twitchClient = twitchClient.NewTwitchClient()
+		telegaClient      = telegramClient.NewTelegramClient()
+		twitchOauthClient = twitchOauthClient.NewTwitchOauthClient()
 	)
 
-	tts, err := twitchTokenService.NewTwitchTokenService(db, twitchClient)
+	tts, err := twitchTokenService.NewTwitchTokenService(db, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init twitchTokenService: %v", err)
 	}
 	go tts.SyncBg(ctx, time.Second*10)
+
+	twitchClient := twitchClient.NewTwitchClient(tts)
 
 	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient)
 	if err != nil {
@@ -63,7 +66,7 @@ func main() {
 	go tucs.SyncBg(ctx, time.Second*1)
 
 	telegaService := telegramService.NewService(telegaClient)
-	twitchService := twitchService.NewService(twitchClient)
+	twitchService := twitchService.NewService(twitchClient, twitchOauthClient)
 
 	telegaHandler := telegramHandler.NewTelegramHandler(telegaService)
 	twitchHandler := twitchHandler.NewTwitchHandler(twitchService)

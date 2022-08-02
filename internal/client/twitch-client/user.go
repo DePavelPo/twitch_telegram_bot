@@ -23,7 +23,7 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []st
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", "https://api.twitch.tv/helix/users", nil)
+	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/users", nil)
 	if err != nil {
 		return
 	}
@@ -39,7 +39,7 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []st
 	req.URL.RawQuery = query.Encode()
 
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", twc.twitchTokenService.GetCurrentToken(ctx)))
 
 	resp, err := client.Do(req)
 	if err != nil {

@@ -11,7 +11,21 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
+
+	twitch_token_service "twitch_telegram_bot/internal/service/twitch_token"
 )
+
+const twitchApiSchemeHost string = "https://api.twitch.tv"
+
+type TwitchClient struct {
+	twitchTokenService *twitch_token_service.TwitchTokenService
+}
+
+func NewTwitchClient(twitchTokenService *twitch_token_service.TwitchTokenService) *TwitchClient {
+	return &TwitchClient{
+		twitchTokenService: twitchTokenService,
+	}
+}
 
 func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, token string, ids []string) (data *models.Streams, err error) {
 
@@ -19,7 +33,7 @@ func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, token s
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", "https://api.twitch.tv/helix/streams", nil)
+	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/streams", nil)
 	if err != nil {
 		return
 	}
@@ -35,7 +49,7 @@ func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, token s
 	req.URL.RawQuery = query.Encode()
 
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", twc.twitchTokenService.GetCurrentToken(ctx)))
 
 	resp, err := client.Do(req)
 	if err != nil {

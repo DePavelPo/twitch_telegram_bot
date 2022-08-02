@@ -10,7 +10,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
+	twitch_oauth_client "twitch_telegram_bot/internal/client/twitch-oauth-client"
 )
 
 const (
@@ -19,16 +19,16 @@ const (
 )
 
 type TwitchTokenService struct {
-	db           *sqlx.DB
-	token        string
-	twitchClient *twitch_client.TwitchClient
+	db                *sqlx.DB
+	token             string
+	twitchOauthClient *twitch_oauth_client.TwitchOauthClient
 }
 
 // TODO: прокидывать токен в другие модули
-func NewTwitchTokenService(db *sqlx.DB, twitchClient *twitch_client.TwitchClient) (*TwitchTokenService, error) {
+func NewTwitchTokenService(db *sqlx.DB, twitchOauthClient *twitch_oauth_client.TwitchOauthClient) (*TwitchTokenService, error) {
 	service := &TwitchTokenService{
-		db:           db,
-		twitchClient: twitchClient,
+		db:                db,
+		twitchOauthClient: twitchOauthClient,
 	}
 
 	ctx := context.Background()
@@ -40,48 +40,65 @@ func NewTwitchTokenService(db *sqlx.DB, twitchClient *twitch_client.TwitchClient
 	return service, nil
 }
 
+func (tts *TwitchTokenService) GetCurrentToken(ctx context.Context) string {
+	return tts.token
+}
+
 // TODO: подумать над оптимизацией
 func (tts *TwitchTokenService) Sync(ctx context.Context) error {
 
-	token, err := tts.GetNotExpiredToken(ctx)
+	tx, err := tts.db.BeginTxx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return errors.Wrap(err, "BeginTxx")
+	}
+
+	defer tx.Rollback()
+
+	token, err := tts.GetNotExpiredToken(ctx, tx)
 	if err != nil {
 		return errors.Wrap(err, "GetNotExpiredToken")
 	}
 
 	if token == nil {
 
-		// TODO: завернуть в транзакцию
 		err := tts.updateToken(ctx)
 		if err != nil {
 			return errors.Wrap(err, "updateToken")
 		}
 
-		err = tts.AddToken(ctx, tts.token)
+		err = tts.AddToken(ctx, tx, tts.token)
 		if err != nil {
 			return errors.Wrap(err, "AddToken")
+		}
+
+		if err = tx.Commit(); err != nil {
+			return errors.Wrap(err, "Commit")
 		}
 
 		return nil
 	}
 
-	_, err = tts.twitchClient.TwitchOAuthValidateToken(ctx, *token)
+	_, err = tts.twitchOauthClient.TwitchOAuthValidateToken(ctx, *token)
 	if err != nil {
 		if err.Error() == tokenInvalid {
 
-			// TODO: завернуть в транзакцию
 			err = tts.updateToken(ctx)
 			if err != nil {
 				return errors.Wrap(err, "updateToken")
 			}
 
-			err = tts.AddToken(ctx, tts.token)
+			err = tts.AddToken(ctx, tx, tts.token)
 			if err != nil {
 				return errors.Wrap(err, "AddToken")
 			}
 
-			err = tts.SetExpiredToken(ctx, *token)
+			err = tts.SetExpiredToken(ctx, tx, *token)
 			if err != nil {
 				return errors.Wrap(err, "SetExpiredToken")
+			}
+
+			if err = tx.Commit(); err != nil {
+				return errors.Wrap(err, "Commit")
 			}
 
 			return nil
@@ -90,11 +107,17 @@ func (tts *TwitchTokenService) Sync(ctx context.Context) error {
 		return errors.Wrap(err, "TwitchOAuthGetToken")
 	}
 
+	if err = tx.Commit(); err != nil {
+		return errors.Wrap(err, "Commit")
+	}
+
+	tts.token = *token
+
 	return nil
 }
 
 func (tts *TwitchTokenService) updateToken(ctx context.Context) error {
-	tokenInfo, err := tts.twitchClient.TwitchOAuthGetToken(ctx)
+	tokenInfo, err := tts.twitchOauthClient.TwitchOAuthGetToken(ctx)
 	if err != nil {
 		return errors.Wrap(err, "TwitchOAuthGetToken")
 	}
@@ -107,7 +130,7 @@ func (tts *TwitchTokenService) updateToken(ctx context.Context) error {
 	return nil
 }
 
-func (tts *TwitchTokenService) GetNotExpiredToken(ctx context.Context) (token *string, err error) {
+func (tts *TwitchTokenService) GetNotExpiredToken(ctx context.Context, tx *sqlx.Tx) (token *string, err error) {
 
 	query := `
 		select 
@@ -119,7 +142,7 @@ func (tts *TwitchTokenService) GetNotExpiredToken(ctx context.Context) (token *s
 		limit 1;
 	`
 
-	err = tts.db.GetContext(ctx, &token, query)
+	err = tx.GetContext(ctx, &token, query)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -128,13 +151,13 @@ func (tts *TwitchTokenService) GetNotExpiredToken(ctx context.Context) (token *s
 	return
 }
 
-func (tts *TwitchTokenService) AddToken(ctx context.Context, token string) (err error) {
+func (tts *TwitchTokenService) AddToken(ctx context.Context, tx *sqlx.Tx, token string) (err error) {
 
 	query := `
 		insert into twitch_tokens ("token") values ($1);
 	`
 
-	res, err := tts.db.ExecContext(ctx, query, token)
+	res, err := tx.ExecContext(ctx, query, token)
 	if err != nil {
 		return err
 	}
@@ -147,7 +170,7 @@ func (tts *TwitchTokenService) AddToken(ctx context.Context, token string) (err 
 	return
 }
 
-func (tts *TwitchTokenService) SetExpiredToken(ctx context.Context, token string) (err error) {
+func (tts *TwitchTokenService) SetExpiredToken(ctx context.Context, tx *sqlx.Tx, token string) (err error) {
 
 	query := `
 		update twitch_tokens 
@@ -155,7 +178,7 @@ func (tts *TwitchTokenService) SetExpiredToken(ctx context.Context, token string
 		where "token" = $1;
 	`
 
-	res, err := tts.db.ExecContext(ctx, query, token)
+	res, err := tx.ExecContext(ctx, query, token)
 	if err != nil {
 		return err
 	}
