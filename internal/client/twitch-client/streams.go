@@ -27,7 +27,7 @@ func NewTwitchClient(twitchTokenService *twitch_token_service.TwitchTokenService
 	}
 }
 
-func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, token string, ids []string) (data *models.Streams, err error) {
+func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []string) (data *models.Streams, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,

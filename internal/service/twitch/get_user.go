@@ -7,11 +7,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (tws *TwitchService) GetUser(ctx context.Context, token, id string) (*models.GetUserInfoResponse, error) {
+func (tws *TwitchService) GetUser(ctx context.Context, id string) (*models.GetUserInfoResponse, error) {
 
 	usersStruct := []string{id}
 
-	userInfo, err := tws.twitchClient.GetUserInfo(ctx, token, usersStruct)
+	userInfo, err := tws.twitchClient.GetUserInfo(ctx, usersStruct)
 	if err != nil {
 		return nil, err
 	}

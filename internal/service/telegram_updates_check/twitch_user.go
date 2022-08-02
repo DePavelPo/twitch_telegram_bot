@@ -3,7 +3,6 @@ package telegram_updates_check
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -21,9 +20,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 		return msg
 	}
 
-	twitchToken := os.Getenv("TWITCH_BEARER")
-
-	users, err := tmcs.twitchClient.GetUserInfo(ctx, twitchToken, []string{*userLogin})
+	users, err := tmcs.twitchClient.GetUserInfo(ctx, []string{*userLogin})
 	if err != nil {
 		logrus.Error(err)
 		msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
@@ -82,14 +79,14 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 	Тип стримера: %s
 	`,
 		user.DisplayName,
-		accCreatedTime.Format("2006.02.01 15:04:05"),
+		accCreatedTime.Format("2006.01.02 15:04:05"),
 		userType,
 		userBroadcasterType)
 
 	msg.ReplyToMessageID = updateInfo.Message.MessageID
 
 	var streamStatus = "не определенно"
-	streams, err := tmcs.twitchClient.GetActiveStreamInfoByUsers(ctx, twitchToken, []string{*userLogin})
+	streams, err := tmcs.twitchClient.GetActiveStreamInfoByUsers(ctx, []string{*userLogin})
 	if err == nil || streams != nil {
 		if len(streams.StreamInfo) < 1 {
 			streamStatus = "оффлайн"

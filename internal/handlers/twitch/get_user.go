@@ -1,9 +1,7 @@
 package twitch_handler
 
 import (
-	"errors"
 	"net/http"
-	"strings"
 	"twitch_telegram_bot/internal/models"
 
 	"twitch_telegram_bot/internal/middleware"
@@ -23,17 +21,15 @@ func (twh *TwitchHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authStr := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authStr, "Bearer ") {
-		err := errors.New("GetUser: token missed")
-		logrus.Errorf(err.Error())
-		middleware.WriteErrorResponse(w, r, http.StatusUnauthorized, err.Error())
-		return
-	}
+	// authStr := r.Header.Get("Authorization")
+	// if !strings.HasPrefix(authStr, "Bearer ") {
+	// 	err := errors.New("GetUser: token missed")
+	// 	logrus.Errorf(err.Error())
+	// 	middleware.WriteErrorResponse(w, r, http.StatusUnauthorized, err.Error())
+	// 	return
+	// }
 
-	token := authStr[len("Bearer "):]
-
-	res, err := twh.twitchService.GetUser(ctx, token, reqDTO.ID)
+	res, err := twh.twitchService.GetUser(ctx, reqDTO.ID)
 	if err != nil {
 		logrus.Error(err)
 		middleware.WriteErrorResponse(w, r, http.StatusInternalServerError, err.Error())

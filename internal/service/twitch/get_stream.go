@@ -7,11 +7,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (tws *TwitchService) GetActiveStreamInfoByUser(ctx context.Context, token, id string) (*models.Streams, error) {
+func (tws *TwitchService) GetActiveStreamInfoByUser(ctx context.Context, id string) (*models.Streams, error) {
 
 	usersStruct := []string{id}
 
-	streamInfo, err := tws.twitchClient.GetActiveStreamInfoByUsers(ctx, token, usersStruct)
+	streamInfo, err := tws.twitchClient.GetActiveStreamInfoByUsers(ctx, usersStruct)
 	if err != nil {
 		return nil, err
 	}

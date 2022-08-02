@@ -17,7 +17,7 @@ import (
 var digitCheck = regexp.MustCompile(`^[0-9]+$`) // check if have only digits
 
 // TODO: запрос не возвращает инфу по несуществующему пользователю
-func (twc *TwitchClient) GetUserInfo(ctx context.Context, token string, ids []string) (data *models.GetUserInfoResponse, err error) {
+func (twc *TwitchClient) GetUserInfo(ctx context.Context, ids []string) (data *models.GetUserInfoResponse, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
