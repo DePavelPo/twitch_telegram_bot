@@ -55,7 +55,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("cannot init twitchTokenService: %v", err)
 	}
-	go tts.SyncBg(ctx, time.Second*10)
+	go tts.SyncBg(ctx, time.Minute*5)
 
 	twitchClient := twitchClient.NewTwitchClient(tts)
 
