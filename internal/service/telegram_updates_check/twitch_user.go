@@ -9,13 +9,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var exampleText string = `Пример запроса:
+	/twitch_user welovegames
+	/twitch_user WELOVEGAMES
+	`
+
 func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg tgbotapi.MessageConfig, updateInfo tgbotapi.Update) tgbotapi.MessageConfig {
 
 	commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchUserCommand)):]
 
 	userLogin, isValid := validateText(commandText)
 	if userLogin == nil || !isValid {
-		msg.Text = "Не корректно составленный запрос, повторите попытку"
+		msg.Text = `Не корректно составленный запрос, повторите попытку. ` + exampleText
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
 		return msg
 	}
@@ -27,13 +32,13 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
 		return msg
 	}
-
+	// 380772110
 	if users == nil {
-		msg.Text = "полльзователь не найден"
+		msg.Text = "Пользователь не найден"
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
 	}
 	if len(users.Data) < 1 {
-		msg.Text = "полльзователь не найден"
+		msg.Text = "Пользователь не найден"
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
 	}
 
@@ -56,7 +61,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 		userType = "глобальный администратор"
 		break
 	default:
-		userType = "пользователь"
+		userType = "простой смертный"
 	}
 
 	var userBroadcasterType string
@@ -68,7 +73,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 		userBroadcasterType = "компаньон"
 		break
 	default:
-		userBroadcasterType = "пользователь"
+		userBroadcasterType = "простой смертный"
 	}
 
 	msg.Text = fmt.Sprintf(`

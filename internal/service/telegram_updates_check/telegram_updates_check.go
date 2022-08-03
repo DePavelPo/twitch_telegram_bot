@@ -75,6 +75,8 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			rand.Seed(time.Now().UnixNano())
 			// TODO: расширять функционал
+			// TODO: добавить обработку комманды /start
+			// TODO: добавить комманду со списком комманд бота
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, pingCommand):
 				msg.Text = "pong"
