@@ -124,7 +124,10 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg = tmcs.TwitchUserCase(ctx, msg, updateInfo)
 			}
 
-			bot.Send(msg)
+			_, err = bot.Send(msg)
+			if err != nil {
+				logrus.Infof("/twitch_user: telegram send message error: %v", err)
+			}
 		}
 	}
 
