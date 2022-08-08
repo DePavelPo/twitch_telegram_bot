@@ -2,10 +2,19 @@ package twitch_notification
 
 import (
 	"context"
+	"database/sql"
+	"strconv"
+	"time"
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	twitchNotificationBGSync = "twitchNotification_BGSync"
+	// tokenInvalid          = "token invalid"
 )
 
 type TwitchNotificationService struct {
@@ -60,9 +69,30 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 						notification.TwitchUser == streamInfo.UserLogin ||
 						notification.TwitchUser == streamInfo.UserName {
 
-						err := tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
+						tx, err := tn.db.BeginTxx(ctx, &sql.TxOptions{})
+						if err != nil {
+							return errors.Wrap(err, "BeginTxx")
+						}
+						defer tx.Rollback()
+
+						streamIdInt, err := strconv.ParseUint(streamInfo.StreamId, 10, 64)
+						if err != nil {
+							logrus.Infof("cannot parse %s to uint64", streamInfo.StreamId)
+							continue
+						}
+
+						err = tn.AddTwitchNotificationLog(ctx, tx, streamIdInt, notification.ID)
+						if err != nil {
+							logrus.Infof("cannot add notification log for %d", streamIdInt)
+							continue
+						}
+						err = tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
 						if err != nil {
 							return errors.Wrap(err, "ThrowNotification")
+						}
+
+						if err = tx.Commit(); err != nil {
+							return errors.Wrap(err, "Commit")
 						}
 
 					}
@@ -152,4 +182,78 @@ func (tn *TwitchNotificationService) SetInactiveNotification(ctx context.Context
 	}
 
 	return
+}
+
+func (tn *TwitchNotificationService) AddTwitchNotificationLog(ctx context.Context, tx *sqlx.Tx, streamId, requestId uint64) (err error) {
+
+	query := `
+				insert into twitch_notifications_log (stream_id, request_id) 
+					values ($1, $2)
+				on conflict (stream_id, request_id) do nothing;
+	`
+
+	res, err := tx.ExecContext(ctx, query, streamId, requestId)
+	if err != nil {
+		return err
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if n < 1 {
+		return errors.New("no rows insert")
+	}
+
+	return
+}
+
+type GetTwitchNotificationLogResponse struct {
+	ChatId     uint64 `db:"chat_id"`
+	TwitchUser string `db:"twitch_user"`
+	StreamId   uint64 `db:"stream_id"`
+}
+
+func (tn *TwitchNotificationService) GetTwitchNotificationLogByStreamId(ctx context.Context,
+	streamId uint64) (logInfo *GetTwitchNotificationsResponse, err error) {
+
+	query := `
+				select 
+					tn.chat_id, 
+					tn.twitch_user, 
+					tnl.stream_id 
+				from twitch_notifications tn 
+				left join twitch_notifications_log tnl 
+					on tn.id = tnl.request_id
+				where tnl.stream_id = $1;
+			`
+
+	err = tn.db.GetContext(ctx, logInfo, query, streamId)
+	if err != nil {
+		return &GetTwitchNotificationsResponse{}, errors.Wrap(err, "GetTwitchNotificationLogByStreamId getContext")
+	}
+
+	return
+}
+
+func (tn *TwitchNotificationService) SyncBg(ctx context.Context, syncInterval time.Duration) {
+	ticker := time.NewTicker(syncInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logrus.Infof("stoping bg %s process", twitchNotificationBGSync)
+			return
+		case <-ticker.C:
+			logrus.Infof("started bg %s process", twitchNotificationBGSync)
+			err := tn.Sync(ctx)
+			if err != nil {
+				logrus.Infof("could not check twitch token: %v", err)
+				continue
+			}
+			logrus.Info("twitch token check was complited")
+		}
+	}
 }

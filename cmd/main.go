@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	notificationService "twitch_telegram_bot/internal/service/notification"
 	teleUpdatesCheckService "twitch_telegram_bot/internal/service/telegram_updates_check"
 
 	twitchTokenService "twitch_telegram_bot/internal/service/twitch_token"
@@ -64,6 +65,12 @@ func main() {
 		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
 	}
 	go tucs.SyncBg(ctx, time.Second*1)
+
+	tns, err := notificationService.NewTwitchNotificationService(db, twitchClient)
+	if err != nil {
+		logrus.Fatalf("cannot init notificationService: %v", err)
+	}
+	go tns.SyncBg(ctx, time.Minute*5)
 
 	telegaService := telegramService.NewService(telegaClient)
 	twitchService := twitchService.NewService(twitchClient, twitchOauthClient)
