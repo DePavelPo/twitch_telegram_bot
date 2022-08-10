@@ -9,6 +9,8 @@ import (
 	"time"
 	"twitch_telegram_bot/internal/models"
 
+	notificationService "twitch_telegram_bot/internal/service/notification"
+
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -21,15 +23,22 @@ const (
 	jokeCommand                = "/anec"
 	twitchUserCommand          = "/twitch_user"
 	twitchBanTest              = "/twitch_ban_test"
+	twitchStreamNotifi         = "/twitch_stream_notification"
+	twitchDropStreamNotifi     = "/twitch_drop_stream_notification"
 )
 
 type TelegramUpdatesCheckService struct {
-	twitchClient *twitch_client.TwitchClient
+	twitchClient        *twitch_client.TwitchClient
+	notificationService *notificationService.TwitchNotificationService
 }
 
-func NewTelegramUpdatesCheckService(twitchClient *twitch_client.TwitchClient) (*TelegramUpdatesCheckService, error) {
+func NewTelegramUpdatesCheckService(
+	twitchClient *twitch_client.TwitchClient,
+	notifiService *notificationService.TwitchNotificationService,
+) (*TelegramUpdatesCheckService, error) {
 	return &TelegramUpdatesCheckService{
-		twitchClient: twitchClient,
+		twitchClient:        twitchClient,
+		notificationService: notifiService,
 	}, nil
 }
 
@@ -119,9 +128,71 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg.Text = fmt.Sprintf("Твой шанс быть забанненым на твиче = %d%% %s", chance, emote)
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
+
 				msg = tmcs.TwitchUserCase(ctx, msg, updateInfo)
+				break
+
+			// TODO: кастомизировать exampleText
+			// TODO: created_at, updated_at для таблицы twitch_notification_log
+
+			case strings.HasPrefix(updateInfo.Message.Text, twitchStreamNotifi):
+
+				chatId := updateInfo.Message.Chat.ID
+
+				commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchStreamNotifi)):]
+
+				userLogin, isValid := validateText(commandText)
+				if userLogin == nil || !isValid {
+					msg.Text = `Не корректно составленный запрос, повторите попытку. ` + exampleText
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				err := tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), *userLogin)
+				if err != nil {
+					logrus.Infof("Add twitch notification request error: %v", err)
+					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				msg.Text = "Запрос успешно принят! Теперь в этот канал будут приходить уведомления о трансляции на указанном вами twitch канале"
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				break
+
+			case strings.HasPrefix(updateInfo.Message.Text, twitchDropStreamNotifi):
+
+				chatId := updateInfo.Message.Chat.ID
+
+				commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchDropStreamNotifi)):]
+
+				userLogin, isValid := validateText(commandText)
+				if userLogin == nil || !isValid {
+					msg.Text = `Не корректно составленный запрос, повторите попытку. ` + exampleText
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				err := tmcs.notificationService.SetInactiveNotification(ctx, uint64(chatId), *userLogin)
+				if err != nil {
+					if err.Error() == "notification not found" {
+						logrus.Infof("notification by chatId %d user %s not found", chatId, *userLogin)
+						msg.Text = "Заявок на уведомления по этому каналу не найдено. Возможно неправильно указано наименование или такая заявка не создавалась"
+						msg.ReplyToMessageID = updateInfo.Message.MessageID
+						break
+					}
+					logrus.Infof("Set inactive twitch notification error: %v", err)
+					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				msg.Text = "Уведомления по указанному twitch каналу успешно отключены"
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				break
 			}
 
 			_, err = bot.Send(msg)

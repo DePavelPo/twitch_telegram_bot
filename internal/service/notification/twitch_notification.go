@@ -52,6 +52,8 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 			return nil
 		}
 
+		lastId = notifications[len(notifications)-1].ID
+
 		users := []string{}
 		for _, notification := range notifications {
 			users = append(users, notification.TwitchUser)
@@ -73,21 +75,23 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 						if err != nil {
 							return errors.Wrap(err, "BeginTxx")
 						}
-						defer tx.Rollback()
 
 						streamIdInt, err := strconv.ParseUint(streamInfo.StreamId, 10, 64)
 						if err != nil {
 							logrus.Infof("cannot parse %s to uint64", streamInfo.StreamId)
+							tx.Rollback()
 							continue
 						}
 
 						err = tn.AddTwitchNotificationLog(ctx, tx, streamIdInt, notification.ID)
 						if err != nil {
 							logrus.Infof("cannot add notification log for %d", streamIdInt)
+							tx.Rollback()
 							continue
 						}
 						err = tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
 						if err != nil {
+							tx.Rollback()
 							return errors.Wrap(err, "ThrowNotification")
 						}
 
@@ -128,7 +132,7 @@ func (tn *TwitchNotificationService) GetTwitchNotificationsBatch(ctx context.Con
 				limit $2;
 			`
 
-	err = tn.db.SelectContext(ctx, notifInfo, query, lastId, batchSize)
+	err = tn.db.SelectContext(ctx, &notifInfo, query, lastId, batchSize)
 	if err != nil {
 		return []GetTwitchNotificationsResponse{}, errors.Wrap(err, "GetTwitchNotificationsBatch selectContext")
 	}
@@ -136,7 +140,7 @@ func (tn *TwitchNotificationService) GetTwitchNotificationsBatch(ctx context.Con
 	return
 }
 
-func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, tx *sqlx.Tx, chatId uint64, user string) (err error) {
+func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, chatId uint64, user string) (err error) {
 
 	query := `
 				insert into twitch_notifications (chat_id, twitch_user) 
@@ -146,7 +150,7 @@ func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, 
 					set is_active = true;
 	`
 
-	res, err := tx.ExecContext(ctx, query, chatId, user)
+	res, err := tn.db.ExecContext(ctx, query, chatId, user)
 	if err != nil {
 		return err
 	}
@@ -159,7 +163,7 @@ func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, 
 	return
 }
 
-func (tn *TwitchNotificationService) SetInactiveNotification(ctx context.Context, tx *sqlx.Tx, chatId uint64, user string) (err error) {
+func (tn *TwitchNotificationService) SetInactiveNotification(ctx context.Context, chatId uint64, user string) (err error) {
 
 	query := `
 				update twitch_notifications 
@@ -167,7 +171,7 @@ func (tn *TwitchNotificationService) SetInactiveNotification(ctx context.Context
 					where (chat_id, twitch_user) = ($1, $2);
 	`
 
-	res, err := tx.ExecContext(ctx, query, chatId, user)
+	res, err := tn.db.ExecContext(ctx, query, chatId, user)
 	if err != nil {
 		return err
 	}

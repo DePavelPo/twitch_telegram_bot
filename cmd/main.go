@@ -60,17 +60,19 @@ func main() {
 
 	twitchClient := twitchClient.NewTwitchClient(tts)
 
-	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient)
-	if err != nil {
-		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
-	}
-	go tucs.SyncBg(ctx, time.Second*1)
-
 	tns, err := notificationService.NewTwitchNotificationService(db, twitchClient)
 	if err != nil {
 		logrus.Fatalf("cannot init notificationService: %v", err)
 	}
 	go tns.SyncBg(ctx, time.Minute*5)
+
+	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, tns)
+	if err != nil {
+		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
+	}
+	go tucs.SyncBg(ctx, time.Second*1)
+
+
 
 	telegaService := telegramService.NewService(telegaClient)
 	twitchService := twitchService.NewService(twitchClient, twitchOauthClient)
