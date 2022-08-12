@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 	"twitch_telegram_bot/internal/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -26,11 +27,15 @@ func (tn *TwitchNotificationService) ThrowNotification(ctx context.Context, stre
 
 	msg.Text = fmt.Sprintf(`
 	Стрим пользователя %s онлайн!
-	Заголовок: %s
+	Заголовок: %s,
+	Продолжительность: %s,
+	Число зрителей: %d,
 	%s
 	`,
 		stream.UserName,
 		stream.Title,
+		createStreamDuration(stream.StartedAt),
+		stream.ViewerCount,
 		twitchLink)
 
 	_, err = bot.Send(msg)
@@ -39,4 +44,20 @@ func (tn *TwitchNotificationService) ThrowNotification(ctx context.Context, stre
 	}
 
 	return nil
+}
+
+func createStreamDuration(startedAt time.Time) string {
+
+	location := time.FixedZone("MSK", 3*60*60)
+	streamStartTime := startedAt.In(location)
+
+	streamDuration := time.Now().Sub(streamStartTime)
+	hours := streamDuration / time.Hour
+	streamDuration = streamDuration % time.Hour
+	minutes := streamDuration / time.Minute
+	streamDuration = streamDuration % time.Minute
+	seconds := streamDuration / time.Second
+	streamDurationStr := fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+
+	return streamDurationStr
 }

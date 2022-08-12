@@ -4,7 +4,9 @@ create table twitch_notifications_log
 (
     id bigserial not null primary key,
     stream_id bigint not null,
-    request_id bigint references twitch_notifications(id) not null
+    request_id bigint references twitch_notifications(id) not null,
+    created_at timestamp with time zone default now() not null,
+    updated_at timestamp with time zone default now() not null
 );
 
 create unique index stream_id_request_id_unique_key on twitch_notifications_log(stream_id, request_id);

@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type StreamType string
 
 var StreamLive StreamType = "live"
@@ -23,7 +25,7 @@ type Stream struct {
 	StreamType   StreamType `json:"type"`          // Stream type: "live" or "" (in case of error)
 	Title        string     `json:"title"`         // Stream title
 	ViewerCount  uint64     `json:"viewer_count"`  // Number of viewers watching the stream at the time of the query
-	StartedAt    string     `json:"started_at"`    // UTC timestamp
+	StartedAt    time.Time  `json:"started_at"`    // UTC timestamp
 	Lang         string     `json:"language"`      // Stream language
 	ThumbnailUrl string     `json:"thumbnail_url"` // Thumbnail URL of the stream. Replace {width} and {height} with any values to get that size image
 	TagIds       []string   `json:"tag_ids"`       // Shows tag IDs that apply to the stream
