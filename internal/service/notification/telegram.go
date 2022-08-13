@@ -1,4 +1,4 @@
-package twitch_notification
+package notification
 
 import (
 	"context"

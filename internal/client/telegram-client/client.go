@@ -4,8 +4,6 @@ import (
 	"context"
 	"os"
 
-	"twitch_telegram_bot/internal/models"
-
 	tgBotApi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -16,7 +14,7 @@ func NewTelegramClient() *TelegramClient {
 	return &TelegramClient{}
 }
 
-func (tc *TelegramClient) GetData(ctx context.Context) (*models.TeleBotData, error) {
+func (tc *TelegramClient) GetBotCommands(ctx context.Context) (res []tgBotApi.BotCommand, err error) {
 	bot, err := tgBotApi.NewBotAPI(os.Getenv("TELEGRAM_API_TOKEN"))
 	if err != nil {
 		return nil, err
@@ -24,17 +22,11 @@ func (tc *TelegramClient) GetData(ctx context.Context) (*models.TeleBotData, err
 
 	bot.Debug = true
 
-	botCommands, err := bot.GetMyCommands()
+	res, err = bot.GetMyCommands()
 	if err != nil {
 		return nil, err
 	}
 
-	var res models.TeleBotData
-
-	for _, botCommand := range botCommands {
-		res.Commands = append(res.Commands, botCommand.Command)
-	}
-
-	return &res, nil
+	return
 
 }

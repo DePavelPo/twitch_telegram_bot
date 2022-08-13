@@ -1,5 +1,10 @@
 package models
 
-type TeleBotData struct {
-	Commands []string
+type TeleBotCommands struct {
+	Commands []TeleBotCommand
+}
+
+type TeleBotCommand struct {
+	Command     string
+	Description string
 }

@@ -13,32 +13,41 @@ import (
 
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
 
+	telegram_service "twitch_telegram_bot/internal/service/telegram"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
 )
 
+type teleCommands string
+
 const (
-	telegramUpdatesCheckBGSync = "telegramUpdatesCheck_BGSync"
-	pingCommand                = "/ping"
-	jokeCommand                = "/anec"
-	twitchUserCommand          = "/twitch_user"
-	twitchBanTest              = "/twitch_ban_test"
-	twitchStreamNotifi         = "/twitch_stream_notification"
-	twitchDropStreamNotifi     = "/twitch_drop_stream_notification"
+	telegramUpdatesCheckBGSync              = "telegramUpdatesCheck_BGSync"
+	pingCommand                teleCommands = "/ping"
+	commands                   teleCommands = "/commands"
+	jokeCommand                teleCommands = "/anec"
+	twitchUserCommand          teleCommands = "/twitch_user"
+	twitchBanTest              teleCommands = "/twitch_ban_test"
+	twitchStreamNotifi         teleCommands = "/twitch_stream_notification"
+	twitchDropStreamNotifi     teleCommands = "/twitch_drop_stream_notification"
 )
 
 type TelegramUpdatesCheckService struct {
 	twitchClient        *twitch_client.TwitchClient
 	notificationService *notificationService.TwitchNotificationService
+
+	telegramService *telegram_service.TelegramService
 }
 
 func NewTelegramUpdatesCheckService(
 	twitchClient *twitch_client.TwitchClient,
 	notifiService *notificationService.TwitchNotificationService,
+	telegramService *telegram_service.TelegramService,
 ) (*TelegramUpdatesCheckService, error) {
 	return &TelegramUpdatesCheckService{
 		twitchClient:        twitchClient,
 		notificationService: notifiService,
+		telegramService:     telegramService,
 	}, nil
 }
 
@@ -81,18 +90,42 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			}
 
 			// TODO: добавить валидацию
-
 			rand.Seed(time.Now().UnixNano())
 			// TODO: расширять функционал
 			// TODO: добавить обработку комманды /start
-			// TODO: добавить комманду со списком комманд бота
 			switch {
-			case strings.HasPrefix(updateInfo.Message.Text, pingCommand):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(pingCommand)):
 				msg.Text = "pong"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 				break
 
-			case strings.HasPrefix(updateInfo.Message.Text, jokeCommand):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(commands)):
+				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
+				if err != nil {
+					logrus.Infof("GetBotCommands error: %v", err)
+					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				msg.Text = `Список комманд бота:`
+
+				if teleCommands != nil {
+					for _, teleCommand := range teleCommands.Commands {
+						msg.Text = fmt.Sprintf(
+							`
+							%s
+							%s - %s
+							`, msg.Text, teleCommand.Command, teleCommand.Description,
+						)
+					}
+
+				}
+
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				break
+
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(jokeCommand)):
 
 				msg.Text = fmt.Sprintf(`
 				Внимание, анекдот!
@@ -101,7 +134,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					models.JokeList[rand.Intn(len(models.JokeList))])
 				break
 
-			case strings.HasPrefix(updateInfo.Message.Text, twitchBanTest):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchBanTest)):
 				var emote string
 
 				chance := rand.Intn(101)
@@ -130,15 +163,14 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 				break
 
-			case strings.HasPrefix(updateInfo.Message.Text, twitchUserCommand):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
 
 				msg = tmcs.TwitchUserCase(ctx, msg, updateInfo)
 				break
 
 			// TODO: кастомизировать exampleText
-			// TODO: created_at, updated_at для таблицы twitch_notification_log
 
-			case strings.HasPrefix(updateInfo.Message.Text, twitchStreamNotifi):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
 
 				chatId := updateInfo.Message.Chat.ID
 
@@ -163,7 +195,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 				break
 
-			case strings.HasPrefix(updateInfo.Message.Text, twitchDropStreamNotifi):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropStreamNotifi)):
 
 				chatId := updateInfo.Message.Chat.ID
 
