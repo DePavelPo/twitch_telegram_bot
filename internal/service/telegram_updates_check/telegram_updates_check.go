@@ -23,6 +23,7 @@ type teleCommands string
 
 const (
 	telegramUpdatesCheckBGSync              = "telegramUpdatesCheck_BGSync"
+	startCommand               teleCommands = "/start"
 	pingCommand                teleCommands = "/ping"
 	commands                   teleCommands = "/commands"
 	jokeCommand                teleCommands = "/anec"
@@ -92,8 +93,39 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			// TODO: добавить валидацию
 			rand.Seed(time.Now().UnixNano())
 			// TODO: расширять функционал
-			// TODO: добавить обработку комманды /start
+			// TODO: раскидать все кейсы по отдельным функциям
 			switch {
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(startCommand)):
+
+				msg.Text = `Приветвую вас! Бот ппредоставляет функционал для взаимодействия со стриминговой платформой Twitch
+				`
+
+				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
+				if err != nil {
+					logrus.Infof("GetBotCommands error: %v", err)
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				msg.Text = fmt.Sprintf(
+					`%s
+					%s
+					`, msg.Text, "Список комманд бота:")
+
+				if teleCommands != nil {
+					for _, teleCommand := range teleCommands.Commands {
+						msg.Text = fmt.Sprintf(
+							`
+							%s
+							%s - %s`, msg.Text, teleCommand.Command, teleCommand.Description,
+						)
+					}
+
+				}
+
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				break
+
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(pingCommand)):
 				msg.Text = "pong"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
@@ -108,15 +140,16 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					break
 				}
 
-				msg.Text = `Список комманд бота:`
+				msg.Text = `Список комманд бота:
+				
+				`
 
 				if teleCommands != nil {
 					for _, teleCommand := range teleCommands.Commands {
 						msg.Text = fmt.Sprintf(
 							`
 							%s
-							%s - %s
-							`, msg.Text, teleCommand.Command, teleCommand.Description,
+							%s - %s`, msg.Text, teleCommand.Command, teleCommand.Description,
 						)
 					}
 
