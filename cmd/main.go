@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	notificationService "twitch_telegram_bot/internal/service/notification"
@@ -69,7 +70,7 @@ func main() {
 	}
 	go tns.SyncBg(ctx, time.Minute*5)
 
-	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, tns, telegaService)
+	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, tns, telegaService, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
 	}
@@ -78,22 +79,48 @@ func main() {
 	telegaHandler := telegramHandler.NewTelegramHandler(telegaService)
 	twitchHandler := twitchHandler.NewTwitchHandler(twitchService)
 
-	router := mux.NewRouter()
+	router1 := mux.NewRouter()
+	router2 := mux.NewRouter()
 
-	router.HandleFunc("/commands", telegaHandler.GetBotData).Methods("GET").Schemes("HTTP")
+	router2.HandleFunc("/", twitchHandler.GetUserToken)
 
-	router.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
-	router.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
-	router.HandleFunc("/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
+	router1.HandleFunc("/commands", telegaHandler.GetBotData).Methods("GET").Schemes("HTTP")
+
+	router1.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
+	router1.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
+	router1.HandleFunc("/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
 
 	logrus.Info("server start...")
 
-	srv := &http.Server{
-		Handler:      router,
-		Addr:         "localhost:8084",
-		WriteTimeout: 5 * time.Second,
-		ReadTimeout:  5 * time.Second,
-	}
+	wg := new(sync.WaitGroup)
 
-	logrus.Fatal(srv.ListenAndServe())
+	wg.Add(2)
+
+	go func() {
+		srv := &http.Server{
+			Handler:      router1,
+			Addr:         "localhost:8084",
+			WriteTimeout: 5 * time.Second,
+			ReadTimeout:  5 * time.Second,
+		}
+
+		logrus.Fatal(srv.ListenAndServe())
+		wg.Done()
+
+	}()
+
+	go func() {
+		srv := &http.Server{
+			Handler:      router2,
+			Addr:         "localhost:3000",
+			WriteTimeout: 5 * time.Second,
+			ReadTimeout:  5 * time.Second,
+		}
+
+		logrus.Fatal(srv.ListenAndServe())
+		wg.Done()
+
+	}()
+
+	wg.Wait()
 }

@@ -12,6 +12,7 @@ import (
 	notificationService "twitch_telegram_bot/internal/service/notification"
 
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
+	twitch_oauth_client "twitch_telegram_bot/internal/client/twitch-oauth-client"
 
 	telegram_service "twitch_telegram_bot/internal/service/telegram"
 
@@ -30,6 +31,7 @@ const (
 	twitchUserCommand          teleCommands = "/twitch_user"
 	twitchBanTest              teleCommands = "/twitch_ban_test"
 	twitchStreamNotifi         teleCommands = "/twitch_stream_notification"
+	twitchFollowedStreamNotifi teleCommands = "/twitch_followed_stream_notification"
 	twitchDropStreamNotifi     teleCommands = "/twitch_drop_stream_notification"
 )
 
@@ -38,17 +40,21 @@ type TelegramUpdatesCheckService struct {
 	notificationService *notificationService.TwitchNotificationService
 
 	telegramService *telegram_service.TelegramService
+
+	twitchOauthClient *twitch_oauth_client.TwitchOauthClient
 }
 
 func NewTelegramUpdatesCheckService(
 	twitchClient *twitch_client.TwitchClient,
 	notifiService *notificationService.TwitchNotificationService,
 	telegramService *telegram_service.TelegramService,
+	twitchOauthClient *twitch_oauth_client.TwitchOauthClient,
 ) (*TelegramUpdatesCheckService, error) {
 	return &TelegramUpdatesCheckService{
 		twitchClient:        twitchClient,
 		notificationService: notifiService,
 		telegramService:     telegramService,
+		twitchOauthClient:   twitchOauthClient,
 	}, nil
 }
 
@@ -258,6 +264,22 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg.Text = "Уведомления по указанному twitch каналу успешно отключены"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 				break
+
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotifi)):
+
+				link := tmcs.TwitchCreateOAuth2Link(ctx)
+
+				resp := "Для использования данной возможности, перейдите по ссылке и предоставьте доступ к необходимой информации" + link
+				// if err != nil {
+				// 	msg.Text = "Провал"
+				// 	msg.ReplyToMessageID = updateInfo.Message.MessageID
+				// 	break
+				// }
+
+				msg.Text = resp
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+				break
+
 			}
 
 			_, err = bot.Send(msg)
