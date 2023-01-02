@@ -16,8 +16,15 @@ import (
 
 	telegram_service "twitch_telegram_bot/internal/service/telegram"
 
+	text_formater "twitch_telegram_bot/internal/utils/text-formater"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	somethingWrong string = "Oops, something wrong, try again later or contact my creator"
+	invalidReq     string = "Invalid request, try again. "
 )
 
 type teleCommands string
@@ -31,7 +38,7 @@ const (
 	twitchUserCommand          teleCommands = "/twitch_user"
 	twitchBanTest              teleCommands = "/twitch_ban_test"
 	twitchStreamNotifi         teleCommands = "/twitch_stream_notification"
-	twitchFollowedStreamNotifi teleCommands = "/twitch_followed_stream_notification"
+	twitchFollowedStreamNotify teleCommands = "/twitch_followed_stream_notification"
 	twitchDropStreamNotifi     teleCommands = "/twitch_drop_stream_notification"
 )
 
@@ -87,7 +94,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			// TODO: подумать, как избежать дубликации ответа
 			if timeAndZone.Add(time.Second * 15).Before(timeNow) {
 
-				msg.Text = "Прошу прощения, я немного вздремнул ☺️ . Теперь я пробудился и готов к работе! 😎 "
+				msg.Text = "I'm sorry I took a little nap ☺️ . Now I'm awake and ready to go! 😎 "
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
 				bot.Send(msg)
@@ -103,7 +110,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(startCommand)):
 
-				msg.Text = `Приветвую вас! Бот ппредоставляет функционал для взаимодействия со стриминговой платформой Twitch
+				msg.Text = `Greetings! The bot provides functionality for interacting with Twitch streaming platform
 				`
 
 				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
@@ -116,7 +123,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg.Text = fmt.Sprintf(
 					`%s
 					%s
-					`, msg.Text, "Список комманд бота:")
+					`, msg.Text, "Bot's command list:")
 
 				if teleCommands != nil {
 					for _, teleCommand := range teleCommands.Commands {
@@ -130,23 +137,21 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				}
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
-				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(pingCommand)):
 				msg.Text = "pong"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
-				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(commands)):
 				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
 				if err != nil {
 					logrus.Infof("GetBotCommands error: %v", err)
-					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
-				msg.Text = `Список комманд бота:
+				msg.Text = `Bot's command list:
 				
 				`
 
@@ -162,16 +167,14 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				}
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
-				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(jokeCommand)):
 
 				msg.Text = fmt.Sprintf(`
-				Внимание, анекдот!
+				Attention! joke!
 				
 				%s`,
 					models.JokeList[rand.Intn(len(models.JokeList))])
-				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchBanTest)):
 				var emote string
@@ -180,32 +183,25 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				switch {
 				case chance == 0:
 					emote = "😩"
-					break
 				case chance > 0 && chance <= 25:
 					emote = "🤔"
-					break
 				case chance > 25 && chance <= 50:
 					emote = "😮"
-					break
 				case chance > 50 && chance <= 75:
 					emote = "😃"
-					break
 				case chance > 75 && chance <= 99:
 					emote = "🤯"
-					break
 				default:
 					emote = "😎"
 				}
 
-				msg.Text = fmt.Sprintf("Твой шанс быть забанненым на твиче = %d%% %s", chance, emote)
+				msg.Text = fmt.Sprintf("Your chance to get banned on Twitch = %d%% %s", chance, emote)
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
-				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
 
 				msg = tmcs.TwitchUserCase(ctx, msg, updateInfo)
-				break
 
 			// TODO: кастомизировать exampleText
 
@@ -213,63 +209,65 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				chatId := updateInfo.Message.Chat.ID
 
-				commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchStreamNotifi)):]
+				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchStreamNotifi)):]
 
 				userLogin, isValid := validateText(commandText)
-				if userLogin == nil || !isValid {
-					msg.Text = `Не корректно составленный запрос, повторите попытку. ` + exampleText
+				if userLogin == "" || !isValid {
+					msg.Text = invalidReq + exampleText
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
-				err := tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), *userLogin)
+				userLogin = text_formater.ToLower(userLogin)
+
+				err := tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), userLogin)
 				if err != nil {
 					logrus.Infof("Add twitch notification request error: %v", err)
-					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
-				msg.Text = "Запрос успешно принят! Теперь в этот канал будут приходить уведомления о трансляции на указанном вами twitch канале"
+				msg.Text = "Request successfully accepted! This channel will now receive stream notifications from Twitch channel that you specified"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
-				break
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropStreamNotifi)):
 
 				chatId := updateInfo.Message.Chat.ID
 
-				commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchDropStreamNotifi)):]
+				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchDropStreamNotifi)):]
 
 				userLogin, isValid := validateText(commandText)
-				if userLogin == nil || !isValid {
-					msg.Text = `Не корректно составленный запрос, повторите попытку. ` + exampleText
+				if userLogin == "" || !isValid {
+					msg.Text = invalidReq + exampleText
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
-				err := tmcs.notificationService.SetInactiveNotification(ctx, uint64(chatId), *userLogin)
+				userLogin = text_formater.ToLower(userLogin)
+
+				err := tmcs.notificationService.SetInactiveNotification(ctx, uint64(chatId), userLogin)
 				if err != nil {
 					if err.Error() == "notification not found" {
-						logrus.Infof("notification by chatId %d user %s not found", chatId, *userLogin)
-						msg.Text = "Заявок на уведомления по этому каналу не найдено. Возможно неправильно указано наименование или такая заявка не создавалась"
+						logrus.Infof("notification by chatId %d user %s not found", chatId, userLogin)
+						msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such an application was not created"
 						msg.ReplyToMessageID = updateInfo.Message.MessageID
 						break
 					}
 					logrus.Infof("Set inactive twitch notification error: %v", err)
-					msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
-				msg.Text = "Уведомления по указанному twitch каналу успешно отключены"
+				msg.Text = "Notifications were disabled successfully"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
-				break
 
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotifi)):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotify)):
 
 				link := tmcs.TwitchCreateOAuth2Link(ctx)
 
-				resp := "Для использования данной возможности, перейдите по ссылке и предоставьте доступ к необходимой информации" + link
+				resp := "To use this functionality, follow the link and provide access to the necessary information" + link
 				// if err != nil {
 				// 	msg.Text = "Провал"
 				// 	msg.ReplyToMessageID = updateInfo.Message.MessageID
@@ -278,7 +276,6 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				msg.Text = resp
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
-				break
 
 			}
 
@@ -314,13 +311,13 @@ func (tmcs *TelegramUpdatesCheckService) SyncBg(ctx context.Context, syncInterva
 
 }
 
-func validateText(text string) (str *string, isValid bool) {
+func validateText(text string) (str string, isValid bool) {
 
 	words := strings.Fields(text)
 
 	if len(words) != 1 {
-		return nil, false
+		return "", false
 	}
 
-	return &words[0], true
+	return words[0], true
 }

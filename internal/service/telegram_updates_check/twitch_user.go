@@ -5,41 +5,47 @@ import (
 	"fmt"
 	"time"
 
+	text_formater "twitch_telegram_bot/internal/utils/text-formater"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
 )
 
-var exampleText string = `Пример запроса:
+var exampleText string = `Request example:
 	/twitch_user welovegames
 	/twitch_user WELOVEGAMES
 	`
 
 func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg tgbotapi.MessageConfig, updateInfo tgbotapi.Update) tgbotapi.MessageConfig {
 
-	commandText := updateInfo.Message.Text[len(fmt.Sprintf("%s", twitchUserCommand)):]
+	commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchUserCommand)):]
 
 	userLogin, isValid := validateText(commandText)
-	if userLogin == nil || !isValid {
-		msg.Text = `Не корректно составленный запрос, повторите попытку. ` + exampleText
+	if userLogin == "" || !isValid {
+		msg.Text = invalidReq + exampleText
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
 		return msg
 	}
 
-	users, err := tmcs.twitchClient.GetUserInfo(ctx, []string{*userLogin})
+	userLogin = text_formater.ToLower(userLogin)
+
+	users, err := tmcs.twitchClient.GetUserInfo(ctx, []string{userLogin})
 	if err != nil {
 		logrus.Error(err)
-		msg.Text = "Ой, что-то пошло не так, повторите попытку позже или обратитесь к моему автору"
+		msg.Text = somethingWrong
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
 		return msg
 	}
-	// 380772110
+
 	if users == nil {
-		msg.Text = "Пользователь не найден"
+		msg.Text = "User not found"
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
+		return msg
 	}
 	if len(users.Data) < 1 {
-		msg.Text = "Пользователь не найден"
+		msg.Text = "User not found"
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
+		return msg
 	}
 
 	user := users.Data[0]
@@ -52,36 +58,31 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 	var userType string
 	switch user.Type {
 	case "staff":
-		userType = "сотрудник твича"
-		break
+		userType = "twitch staff"
 	case "admin":
-		userType = "админ твича"
-		break
+		userType = "twitch admin"
 	case "global_mod":
-		userType = "глобальный администратор"
-		break
+		userType = "global moderator"
 	default:
-		userType = "простой смертный"
+		userType = "user"
 	}
 
 	var userBroadcasterType string
 	switch user.BroadcasterType {
 	case "partner":
-		userBroadcasterType = "партнер"
-		break
+		userBroadcasterType = "twitch partner"
 	case "affiliate":
-		userBroadcasterType = "компаньон"
-		break
+		userBroadcasterType = "twitch affiliate"
 	default:
-		userBroadcasterType = "простой смертный"
+		userBroadcasterType = "user"
 	}
 
 	msg.Text = fmt.Sprintf(`
-	Информация о пользователе:
-	Пользователь: %s
-	Дата создания аккаунта: %s
-	Тип пользователя: %s
-	Тип стримера: %s
+	User information:
+	User: %s
+	Account creation date: %s
+	User type: %s
+	Streamer type: %s
 	`,
 		user.DisplayName,
 		accCreatedTime.Format("2006.01.02 15:04:05"),
@@ -90,23 +91,23 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 
 	msg.ReplyToMessageID = updateInfo.Message.MessageID
 
-	var streamStatus = "не определенно"
-	streams, err := tmcs.twitchClient.GetActiveStreamInfoByUsers(ctx, []string{*userLogin})
+	var streamStatus = "undefined"
+	streams, err := tmcs.twitchClient.GetActiveStreamInfoByUsers(ctx, []string{userLogin})
 	if err == nil || streams != nil {
 		if len(streams.StreamInfo) < 1 {
-			streamStatus = "оффлайн"
+			streamStatus = "offline"
 		} else {
 			stream := streams.StreamInfo[0]
 
-			if stream.UserId == *userLogin || stream.UserLogin == *userLogin || stream.UserName == *userLogin {
-				streamStatus = "онлайн"
+			if stream.UserId == userLogin || stream.UserLogin == userLogin || stream.UserName == userLogin {
+				streamStatus = "online"
 			}
 		}
 	}
 
 	msg.Text = fmt.Sprintf(`
 	%s
-	Статус стрима: %s
+	Stream status: %s
 	%s
 	`,
 		msg.Text,

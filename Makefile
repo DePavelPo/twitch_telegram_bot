@@ -3,7 +3,7 @@ export $(shell sed 's/=.*//' .env)
 
 .PHONY: run
 run:
-	go run cmd/main.go
+	go run cmd/twitch-telegram-bot/main.go
 
 .PHONY: migrate
 migrate:
