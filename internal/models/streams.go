@@ -29,6 +29,7 @@ type Stream struct {
 	Lang         string     `json:"language"`      // Stream language
 	ThumbnailUrl string     `json:"thumbnail_url"` // Thumbnail URL of the stream. Replace {width} and {height} with any values to get that size image
 	TagIds       []string   `json:"tag_ids"`       // Shows tag IDs that apply to the stream
+	Tags         []string   `json:"tags"`          // Shows tags that apply to the stream
 	IsMature     bool       `json:"is_mature"`     // Contains mature content that may be inappropriate for younger audiences
 
 }

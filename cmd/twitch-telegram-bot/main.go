@@ -109,18 +109,18 @@ func main() {
 
 	}()
 
-	// go func() {
-	// 	srv := &http.Server{
-	// 		Handler:      router2,
-	// 		Addr:         "localhost:3000",
-	// 		WriteTimeout: 5 * time.Second,
-	// 		ReadTimeout:  5 * time.Second,
-	// 	}
+	go func() {
+		srv := &http.Server{
+			Handler:      router2,
+			Addr:         "localhost:3000",
+			WriteTimeout: 5 * time.Second,
+			ReadTimeout:  5 * time.Second,
+		}
 
-	// 	logrus.Fatal(srv.ListenAndServe())
-	// 	wg.Done()
+		logrus.Fatal(srv.ListenAndServe())
+		wg.Done()
 
-	// }()
+	}()
 
 	wg.Wait()
 }
