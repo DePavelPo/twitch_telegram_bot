@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const twitchIdSchemeHost string = "https://id.twitch.tv"
+const twitchIDSchemeHost string = "https://id.twitch.tv"
 
 type TwitchOauthClient struct {
 }
@@ -28,7 +28,7 @@ func (twc *TwitchOauthClient) TwitchOAuthGetToken(ctx context.Context) (data *mo
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("POST", twitchIdSchemeHost+"/oauth2/token", nil)
+	req, err := http.NewRequest("POST", twitchIDSchemeHost+"/oauth2/token", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (twc *TwitchOauthClient) TwitchOAuthValidateToken(ctx context.Context, toke
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", twitchIdSchemeHost+"/oauth2/validate", nil)
+	req, err := http.NewRequest("GET", twitchIDSchemeHost+"/oauth2/validate", nil)
 	if err != nil {
 		return nil, err
 	}

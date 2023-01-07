@@ -57,7 +57,7 @@ func (twc *TwitchOauthClient) TwitchGetUserToken(ctx context.Context, token stri
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("POST", twitchIdSchemeHost+"/oauth2/token", nil)
+	req, err := http.NewRequest("POST", twitchIDSchemeHost+"/oauth2/token", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (twc *TwitchOauthClient) TwitchGetUserTokenRefresh(ctx context.Context, tok
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("POST", twitchIdSchemeHost+"/oauth2/token", nil)
+	req, err := http.NewRequest("POST", twitchIDSchemeHost+"/oauth2/token", nil)
 	if err != nil {
 		return nil, err
 	}

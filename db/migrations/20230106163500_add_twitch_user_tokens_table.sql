@@ -4,7 +4,7 @@
 create table twitch_user_tokens
 (
     id bigserial not null primary key,
-    user_id bigint not null unique,
+    chat_id bigint not null unique,
     access_token text unique,
     refresh_token text unique,
     scope text[] not null default array[]::varchar[],

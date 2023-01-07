@@ -265,9 +265,9 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotify)):
 
-				link := tmcs.TwitchCreateOAuth2Link(ctx)
+				// link := tmcs.TwitchCreateOAuth2Link(ctx)
 
-				resp := "To use this functionality, follow the link and provide access to the necessary information" + link
+				resp := "To use this functionality, follow the link and provide access to the necessary information"
 				// if err != nil {
 				// 	msg.Text = "Провал"
 				// 	msg.ReplyToMessageID = updateInfo.Message.MessageID
