@@ -10,7 +10,10 @@ type TwitchService struct {
 	twitchOauthClient *twitch_oauth_client.TwitchOauthClient
 }
 
-func NewService(twitchClient *twitch_client.TwitchClient, twitchOauthClient *twitch_oauth_client.TwitchOauthClient) *TwitchService {
+func NewService(
+	twitchClient *twitch_client.TwitchClient,
+	twitchOauthClient *twitch_oauth_client.TwitchOauthClient,
+) *TwitchService {
 	return &TwitchService{
 		twitchClient:      twitchClient,
 		twitchOauthClient: twitchOauthClient,

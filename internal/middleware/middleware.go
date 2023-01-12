@@ -11,9 +11,23 @@ type Response struct {
 	Error string      `json:"error"`
 }
 
+type MessageResponse struct {
+	Message string `json:"msg"`
+}
+
 func WriteSuccessData(w http.ResponseWriter, r *http.Request, data interface{}) {
 	_ = jsoniter.NewEncoder(w).Encode(Response{
 		Data: data,
+	})
+
+	w.WriteHeader(200)
+}
+
+func WriteSuccessMessage(w http.ResponseWriter, r *http.Request, data string) {
+	_ = jsoniter.NewEncoder(w).Encode(Response{
+		Data: MessageResponse{
+			Message: data,
+		},
 	})
 
 	w.WriteHeader(200)

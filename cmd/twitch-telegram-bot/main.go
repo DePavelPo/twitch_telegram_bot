@@ -9,6 +9,7 @@ import (
 
 	notificationService "twitch_telegram_bot/internal/service/notification"
 	teleUpdatesCheckService "twitch_telegram_bot/internal/service/telegram_updates_check"
+	twitchUserAuthservice "twitch_telegram_bot/internal/service/twitch-user-authorization"
 
 	twitchTokenService "twitch_telegram_bot/internal/service/twitch_token"
 
@@ -70,14 +71,19 @@ func main() {
 	}
 	go tns.SyncBg(ctx, time.Minute*5)
 
-	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, tns, telegaService, twitchOauthClient)
+	tuas, err := twitchUserAuthservice.NewTwitchUserAuthorizationService(db, twitchOauthClient)
+	if err != nil {
+		logrus.Fatalf("cannot init twitchUserAuthservice: %v", err)
+	}
+
+	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, tns, tuas, telegaService, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
 	}
 	go tucs.SyncBg(ctx, time.Second*1)
 
 	telegaHandler := telegramHandler.NewTelegramHandler(telegaService)
-	twitchHandler := twitchHandler.NewTwitchHandler(twitchService)
+	twitchHandler := twitchHandler.NewTwitchHandler(twitchService, tuas)
 
 	router1 := mux.NewRouter()
 	router2 := mux.NewRouter()

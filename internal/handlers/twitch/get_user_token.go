@@ -2,20 +2,32 @@ package twitch_handler
 
 import (
 	"net/http"
-	"os"
+	"twitch_telegram_bot/internal/middleware"
 
 	"github.com/sirupsen/logrus"
 )
 
 func (twh *TwitchHandler) GetUserToken(w http.ResponseWriter, r *http.Request) {
 
-	logrus.Info(r.URL.Query().Get("code"))
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
 
-	if r.URL.Query().Get("state") != os.Getenv("TWITCH_STATE") {
-		logrus.Error("invalid request state")
+	if code == "" || state == "" {
+		err := "empty code or state"
+		logrus.Error(err)
+		middleware.WriteErrorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	// token := r.URL.Query().Get("code")
+	ctx := r.Context()
+
+	err := twh.twitchUserAuthservice.CheckUserTokensByState(ctx, code, state)
+	if err != nil {
+		logrus.Error(err)
+		middleware.WriteErrorResponse(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	middleware.WriteSuccessMessage(w, r, "request was processed successfully")
 
 }

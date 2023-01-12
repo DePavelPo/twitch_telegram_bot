@@ -10,6 +10,7 @@ import (
 	"twitch_telegram_bot/internal/models"
 
 	notificationService "twitch_telegram_bot/internal/service/notification"
+	twitchUserAuthservice "twitch_telegram_bot/internal/service/twitch-user-authorization"
 
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
 	twitch_oauth_client "twitch_telegram_bot/internal/client/twitch-oauth-client"
@@ -38,13 +39,14 @@ const (
 	twitchUserCommand          teleCommands = "/twitch_user"
 	twitchBanTest              teleCommands = "/twitch_ban_test"
 	twitchStreamNotifi         teleCommands = "/twitch_stream_notification"
-	twitchFollowedStreamNotify teleCommands = "/twitch_followed_stream_notification"
+	twitchFollowedStreamNotify teleCommands = "/twitch_followed_notification"
 	twitchDropStreamNotifi     teleCommands = "/twitch_drop_stream_notification"
 )
 
 type TelegramUpdatesCheckService struct {
-	twitchClient        *twitch_client.TwitchClient
-	notificationService *notificationService.TwitchNotificationService
+	twitchClient          *twitch_client.TwitchClient
+	notificationService   *notificationService.TwitchNotificationService
+	twitchUserAuthservice *twitchUserAuthservice.TwitchUserAuthorizationService
 
 	telegramService *telegram_service.TelegramService
 
@@ -54,14 +56,16 @@ type TelegramUpdatesCheckService struct {
 func NewTelegramUpdatesCheckService(
 	twitchClient *twitch_client.TwitchClient,
 	notifiService *notificationService.TwitchNotificationService,
+	twitchUserAuthservice *twitchUserAuthservice.TwitchUserAuthorizationService,
 	telegramService *telegram_service.TelegramService,
 	twitchOauthClient *twitch_oauth_client.TwitchOauthClient,
 ) (*TelegramUpdatesCheckService, error) {
 	return &TelegramUpdatesCheckService{
-		twitchClient:        twitchClient,
-		notificationService: notifiService,
-		telegramService:     telegramService,
-		twitchOauthClient:   twitchOauthClient,
+		twitchClient:          twitchClient,
+		notificationService:   notifiService,
+		twitchUserAuthservice: twitchUserAuthservice,
+		telegramService:       telegramService,
+		twitchOauthClient:     twitchOauthClient,
 	}, nil
 }
 
@@ -107,6 +111,9 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			rand.Seed(time.Now().UnixNano())
 			// TODO: расширять функционал
 			// TODO: раскидать все кейсы по отдельным функциям
+
+			chatId := updateInfo.Message.Chat.ID
+
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(startCommand)):
 
@@ -233,8 +240,6 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropStreamNotifi)):
 
-				chatId := updateInfo.Message.Chat.ID
-
 				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchDropStreamNotifi)):]
 
 				userLogin, isValid := validateText(commandText)
@@ -265,15 +270,38 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotify)):
 
-				// link := tmcs.TwitchCreateOAuth2Link(ctx)
+				data, err := tmcs.twitchUserAuthservice.CheckUserTokensByChat(ctx, uint64(chatId))
+				if err != nil {
+					logrus.Infof("CheckUserTokensByChat error: %v", err)
+					msg.Text = somethingWrong
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
 
-				resp := "To use this functionality, follow the link and provide access to the necessary information"
-				// if err != nil {
-				// 	msg.Text = "Провал"
-				// 	msg.ReplyToMessageID = updateInfo.Message.MessageID
-				// 	break
-				// }
+				if data.Link != "" {
 
+					resp := "To use this functionality, follow the link and provide access to the necessary information"
+					msg.Text = resp
+
+					board := make([][]tgbotapi.InlineKeyboardButton, 1)
+					for i := range board {
+						board[i] = make([]tgbotapi.InlineKeyboardButton, 1)
+					}
+
+					board[0][0].Text = "Open Link"
+					board[0][0].URL = &data.Link
+
+					msg.ReplyMarkup = tgbotapi.InlineKeyboardMarkup{
+						InlineKeyboard: board,
+					}
+
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				logrus.Info(data.UserID)
+
+				resp := "Sorry, the functional is not available now"
 				msg.Text = resp
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
@@ -281,7 +309,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			_, err = bot.Send(msg)
 			if err != nil {
-				logrus.Infof("/twitch_user: telegram send message error: %v", err)
+				logrus.Infof("telegram send message error: %v", err)
 			}
 		}
 	}

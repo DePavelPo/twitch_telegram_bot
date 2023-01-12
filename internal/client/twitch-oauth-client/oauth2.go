@@ -11,6 +11,7 @@ import (
 	"twitch_telegram_bot/internal/models"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -125,6 +126,21 @@ func (twc *TwitchOauthClient) TwitchGetUserTokenRefresh(ctx context.Context, tok
 	readedResp, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusBadRequest {
+
+			var invalidTokenResp models.ValidateTokenInvalid
+			err = jsoniter.Unmarshal(readedResp, &invalidTokenResp)
+			if err != nil {
+				return nil, err
+			}
+
+			return nil, errors.New("Invalid refresh token")
+		}
+
+		return nil, errors.Errorf("refresh token failed with status code: %d", resp.StatusCode)
 	}
 
 	var tokenInfo models.TwitchOautGetUserTokenResponse

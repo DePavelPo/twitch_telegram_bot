@@ -101,7 +101,7 @@ func (twc *TwitchOauthClient) TwitchOAuthValidateToken(ctx context.Context, toke
 			return nil, errors.New("token invalid")
 		}
 
-		return nil, errors.Errorf("get twitch streams failed with status code: %d", resp.StatusCode)
+		return nil, errors.Errorf("validate token failed with status code: %d", resp.StatusCode)
 	}
 
 	var validateTokenInfo models.TwitchOautValidateTokenResponse
