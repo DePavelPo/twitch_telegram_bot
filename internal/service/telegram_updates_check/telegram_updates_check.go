@@ -227,7 +227,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				userLogin = text_formater.ToLower(userLogin)
 
-				err := tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), userLogin)
+				err := tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), userLogin, models.NotificationByUser)
 				if err != nil {
 					logrus.Infof("Add twitch notification request error: %v", err)
 					msg.Text = somethingWrong
@@ -251,7 +251,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				userLogin = text_formater.ToLower(userLogin)
 
-				err := tmcs.notificationService.SetInactiveNotification(ctx, uint64(chatId), userLogin)
+				err := tmcs.notificationService.SetInactiveNotificationByUser(ctx, uint64(chatId), userLogin)
 				if err != nil {
 					if err.Error() == "notification not found" {
 						logrus.Infof("notification by chatId %d user %s not found", chatId, userLogin)
@@ -299,10 +299,15 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					break
 				}
 
-				logrus.Info(data.UserID)
+				err = tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), data.UserID, models.NotificationFollowed)
+				if err != nil {
+					logrus.Infof("Add twitch notification request error: %v", err)
+					msg.Text = somethingWrong
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
 
-				resp := "Sorry, the functional is not available now"
-				msg.Text = resp
+				msg.Text = "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
 			}

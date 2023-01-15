@@ -26,10 +26,10 @@ func (tn *TwitchNotificationService) ThrowNotification(ctx context.Context, stre
 	twitchLink := fmt.Sprintf("https://www.twitch.tv/%s", stream.UserLogin)
 
 	msg.Text = fmt.Sprintf(`
-	Стрим пользователя %s онлайн!
-	Заголовок: %s,
-	Продолжительность: %s,
-	Число зрителей: %d,
+	%s stream is online!
+	Title: %s,
+	Current stream duration: %s,
+	Count of viewers: %d,
 	%s
 	`,
 		stream.UserName,

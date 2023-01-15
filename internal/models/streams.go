@@ -37,3 +37,10 @@ type Stream struct {
 type Pagination struct {
 	Cursor string `json:"cursor"`
 }
+
+type StreamNotificationType string
+
+var (
+	NotificationByUser   StreamNotificationType = "by_user"
+	NotificationFollowed StreamNotificationType = "followed"
+)

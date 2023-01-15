@@ -93,7 +93,7 @@ func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []s
 	return
 }
 
-func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID uint64, token string) (data *models.Streams, err error) {
+func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID, token string) (data *models.Streams, err error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -105,7 +105,7 @@ func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID ui
 	}
 
 	query := req.URL.Query()
-	query.Add("user_id", fmt.Sprint(userID))
+	query.Add("user_id", userID)
 	req.URL.RawQuery = query.Encode()
 
 	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))

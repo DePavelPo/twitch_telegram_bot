@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
+	"twitch_telegram_bot/internal/models"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
@@ -14,6 +15,11 @@ const (
 	twitchNotificationBGSync = "twitchNotification_BGSync"
 	// tokenInvalid          = "token invalid"
 )
+
+type followedStreamsReq struct {
+	UserID string
+	Token  string
+}
 
 func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
@@ -33,8 +39,18 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 		lastId = notifications[len(notifications)-1].ID
 
 		users := []string{}
+		// usersWithToken := []followedStreamsReq{}
 		for _, notification := range notifications {
-			users = append(users, notification.TwitchUser)
+
+			switch notification.RequestType {
+			case models.NotificationByUser:
+				users = append(users, notification.TwitchUser)
+			case models.NotificationFollowed:
+
+				// TODO: add logic for tonification by followed
+
+			}
+
 		}
 
 		streams, err := tn.twitchClient.GetActiveStreamInfoByUsers(ctx, users)
@@ -88,9 +104,10 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 }
 
 type GetTwitchNotificationsResponse struct {
-	ID         uint64 `db:"id"`
-	ChatId     uint64 `db:"chat_id"`
-	TwitchUser string `db:"twitch_user"`
+	ID          uint64                        `db:"id"`
+	ChatId      uint64                        `db:"chat_id"`
+	TwitchUser  string                        `db:"twitch_user"`
+	RequestType models.StreamNotificationType `db:"request_type"`
 }
 
 const batchSize = 100
@@ -102,7 +119,8 @@ func (tn *TwitchNotificationService) GetTwitchNotificationsBatch(ctx context.Con
 				select 
 					tn.id, 
 					tn.chat_id, 
-					tn.twitch_user 
+					tn.twitch_user,
+					tn.request_type 
 				from twitch_notifications tn
 				where tn.is_active = true 
 					and tn.id > $1
@@ -118,17 +136,17 @@ func (tn *TwitchNotificationService) GetTwitchNotificationsBatch(ctx context.Con
 	return
 }
 
-func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, chatId uint64, user string) (err error) {
+func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, chatId uint64, user string, notiType models.StreamNotificationType) (err error) {
 
 	query := `
-				insert into twitch_notifications (chat_id, twitch_user) 
-					values ($1, $2)
+				insert into twitch_notifications (chat_id, twitch_user, request_type) 
+					values ($1, $2, $3)
 				on conflict (chat_id, twitch_user) 
 					do update
-					set is_active = true;
+					set (request_type, is_active) = ($3, true);
 	`
 
-	res, err := tn.db.ExecContext(ctx, query, chatId, user)
+	res, err := tn.db.ExecContext(ctx, query, chatId, user, notiType)
 	if err != nil {
 		return err
 	}
@@ -141,12 +159,12 @@ func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, 
 	return
 }
 
-func (tn *TwitchNotificationService) SetInactiveNotification(ctx context.Context, chatId uint64, user string) (err error) {
+func (tn *TwitchNotificationService) SetInactiveNotificationByUser(ctx context.Context, chatId uint64, user string) (err error) {
 
 	query := `
 				update twitch_notifications 
 					set is_active = false
-					where (chat_id, twitch_user) = ($1, $2);
+					where (chat_id, twitch_user, request_type) = ($1, $2, 'by_user');
 	`
 
 	res, err := tn.db.ExecContext(ctx, query, chatId, user)
@@ -214,6 +232,31 @@ func (tn *TwitchNotificationService) GetTwitchNotificationLogByStreamId(ctx cont
 	err = tn.db.GetContext(ctx, logInfo, query, streamId)
 	if err != nil {
 		return &GetTwitchNotificationsResponse{}, errors.Wrap(err, "GetTwitchNotificationLogByStreamId getContext")
+	}
+
+	return
+}
+
+type tokens struct {
+	AccessToken  string `db:"access_token"`
+	RefreshToken string `db:"refresh_token"`
+}
+
+func (tn *TwitchNotificationService) GetTokensByChatID(ctx context.Context,
+	chatID uint64) (data *tokens, err error) {
+
+	query := `
+			select 
+				tut.access_token, 
+				tut.refresh_token 
+			from twitch_user_tokens tut 
+			where 'user:read:follows' = ANY(tut."scope") 
+				and tut.chat_id = $1;
+			`
+
+	err = tn.db.GetContext(ctx, data, query, chatID)
+	if err != nil {
+		return &tokens{}, errors.Wrap(err, "GetTokensByChatID getContext")
 	}
 
 	return

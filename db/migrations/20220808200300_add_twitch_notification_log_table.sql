@@ -11,8 +11,7 @@ create table twitch_notifications_log
 
 create unique index stream_id_request_id_unique_key on twitch_notifications_log(stream_id, request_id);
 
-comment on column twitch_notifications_log.stream_id is 'ID трансляции';
-comment on column twitch_notifications_log.request_id is 'ID запроса на нотификацию';
+comment on column twitch_notifications_log.request_id is 'notification request ID';
 
 -- +goose StatementEnd
 

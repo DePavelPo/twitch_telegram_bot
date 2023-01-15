@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -152,7 +153,7 @@ func (tuas *TwitchUserAuthorizationService) UpdateChatTokens(ctx context.Context
 func (tuas *TwitchUserAuthorizationService) TwitchCreateOAuth2Link(ctx context.Context, state string) string {
 
 	url := fmt.Sprintf(
-		"%s/oauth2/authorize?client_id=%s&response_type=code&redirect_uri=http://localhost:3000&scope=user:read:follows&state=%s",
+		"%s/oauth2/authorize?client_id=%s&response_type=code&redirect_uri=http://localhost:3000&scope=user:read:follows+channel:read:subscriptions&state=%s",
 		twitchIDSchemeHost,
 		os.Getenv("TWITCH_CLIENT_ID"),
 		state,
@@ -161,9 +162,9 @@ func (tuas *TwitchUserAuthorizationService) TwitchCreateOAuth2Link(ctx context.C
 	return url
 }
 
-func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.Context, code, state string) error {
+func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.Context, code, state string, scope []string) error {
 
-	data, err := tuas.GetTokensByState(ctx, state)
+	data, err := tuas.UpdateScopeAndGetTokens(ctx, scope, state)
 
 	if err != nil {
 
@@ -286,18 +287,19 @@ type GetTokensByStateResp struct {
 	ChatID       uint64  `db:"chat_id"`
 }
 
-func (tuas *TwitchUserAuthorizationService) GetTokensByState(ctx context.Context, state string) (data GetTokensByStateResp, err error) {
+func (tuas *TwitchUserAuthorizationService) UpdateScopeAndGetTokens(ctx context.Context, scope []string, state string) (data GetTokensByStateResp, err error) {
 
 	query := `
-		select 
-			chat_id,
-			access_token, 
-			refresh_token 
-		from twitch_user_tokens tut 
-		where current_state = $1;
+		update twitch_user_tokens
+			set scope = $1
+			where current_state = $2
+			returning 
+				chat_id,
+				access_token, 
+				refresh_token;
 	`
 
-	err = tuas.db.GetContext(ctx, &data, query, state)
+	err = tuas.db.GetContext(ctx, &data, query, pq.StringArray(scope), state)
 
 	return
 }

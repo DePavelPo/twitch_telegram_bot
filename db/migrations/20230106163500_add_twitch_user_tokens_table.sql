@@ -7,7 +7,7 @@ create table twitch_user_tokens
     chat_id bigint not null unique,
     access_token text unique,
     refresh_token text unique,
-    scope text[] not null default array[]::varchar[],
+    scope text[] default array[]::text[] not null,
     current_state text not null unique,
     created_at timestamp with time zone default now() not null,
     updated_at timestamp with time zone default now() not null

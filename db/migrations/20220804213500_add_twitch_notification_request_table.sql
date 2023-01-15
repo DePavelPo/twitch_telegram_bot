@@ -12,9 +12,9 @@ create table twitch_notifications
 
 create unique index chat_id_twitch_user_unique_key on twitch_notifications(chat_id, twitch_user);
 
-comment on column twitch_notifications.chat_id is 'ID телеграм чата';
-comment on column twitch_notifications.twitch_user is 'наименование пользователя твича, по которому нужны нотификации';
-comment on column twitch_notifications.is_active is 'активен ли запрос на нотификацию';
+comment on column twitch_notifications.chat_id is 'telegram chat ID';
+comment on column twitch_notifications.twitch_user is 'the twitch user name for which notifications are needed';
+comment on column twitch_notifications.is_active is 'notification request is active or not';
 
 -- +goose StatementEnd
 
