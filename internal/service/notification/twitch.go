@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strconv"
 	"twitch_telegram_bot/internal/models"
 
@@ -13,13 +14,7 @@ import (
 
 const (
 	twitchNotificationBGSync = "twitchNotification_BGSync"
-	// tokenInvalid          = "token invalid"
 )
-
-type followedStreamsReq struct {
-	UserID string
-	Token  string
-}
 
 func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
@@ -39,7 +34,7 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 		lastId = notifications[len(notifications)-1].ID
 
 		users := []string{}
-		// usersWithToken := []followedStreamsReq{}
+
 		for _, notification := range notifications {
 
 			switch notification.RequestType {
@@ -47,7 +42,92 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 				users = append(users, notification.TwitchUser)
 			case models.NotificationFollowed:
 
-				// TODO: add logic for tonification by followed
+				tokens, err := tn.GetTokensByChatID(ctx, notification.ChatId)
+				if err != nil {
+					return errors.Wrap(err, "GetTokensByChatID")
+				}
+
+				if tokens.AccessToken != nil {
+
+					validData, err := tn.twitchOauthClient.TwitchOAuthValidateToken(ctx, *tokens.AccessToken)
+					if err != nil {
+						if err.Error() == models.TokenInvalid {
+
+							newTokens, err := tn.twitchOauthClient.TwitchGetUserTokenRefresh(ctx, *tokens.RefreshToken)
+							if err != nil {
+
+								if err.Error() == models.RefreshTokenInvalid {
+
+									logrus.Infof("Sync notification error: %s", models.RefreshTokenInvalid)
+									break
+
+								}
+							}
+
+							validData, err = tn.twitchOauthClient.TwitchOAuthValidateToken(ctx, newTokens.AccessToken)
+							if err != nil {
+
+								logrus.Infof("Sync notification TwitchOAuthValidateToken error: %s", models.RefreshTokenInvalid)
+								break
+
+							}
+
+							err = tn.UpdateChatTokensByState(ctx, tokens.State, newTokens.AccessToken, newTokens.RefreshToken)
+							if err != nil {
+
+								logrus.Infof("Sync notification UpdateChatTokensByState error: %s", models.RefreshTokenInvalid)
+								break
+
+							}
+
+							tokens.AccessToken = &newTokens.AccessToken
+
+						}
+					}
+
+					fmt.Println(*tokens.AccessToken)
+
+					streams, err := tn.twitchClient.GetActiveFollowedStreams(ctx, validData.UserId, *tokens.AccessToken)
+					if err != nil {
+						return errors.Wrap(err, "GetActiveStreamInfoByUsers")
+					}
+
+					if streams != nil {
+						for _, streamInfo := range streams.StreamInfo {
+
+							tx, err := tn.db.BeginTxx(ctx, &sql.TxOptions{})
+							if err != nil {
+								return errors.Wrap(err, "BeginTxx")
+							}
+
+							streamIdInt, err := strconv.ParseUint(streamInfo.StreamId, 10, 64)
+							if err != nil {
+								logrus.Infof("cannot parse %s to uint64", streamInfo.StreamId)
+								tx.Rollback()
+								continue
+							}
+
+							err = tn.AddTwitchNotificationLog(ctx, tx, streamIdInt, notification.ID)
+							if err != nil {
+								logrus.Infof("cannot add notification log for %d", streamIdInt)
+								tx.Rollback()
+								continue
+							}
+							err = tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
+							if err != nil {
+								tx.Rollback()
+								return errors.Wrap(err, "ThrowNotification")
+							}
+
+							if err = tx.Commit(); err != nil {
+								return errors.Wrap(err, "Commit")
+							}
+
+						}
+
+					}
+
+				}
 
 			}
 
@@ -141,7 +221,7 @@ func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, 
 	query := `
 				insert into twitch_notifications (chat_id, twitch_user, request_type) 
 					values ($1, $2, $3)
-				on conflict (chat_id, twitch_user) 
+				on conflict (chat_id, twitch_user, request_type) 
 					do update
 					set (request_type, is_active) = ($3, true);
 	`
@@ -238,25 +318,39 @@ func (tn *TwitchNotificationService) GetTwitchNotificationLogByStreamId(ctx cont
 }
 
 type tokens struct {
-	AccessToken  string `db:"access_token"`
-	RefreshToken string `db:"refresh_token"`
+	AccessToken  *string `db:"access_token"`
+	RefreshToken *string `db:"refresh_token"`
+	State        string  `db:"current_state"`
 }
 
 func (tn *TwitchNotificationService) GetTokensByChatID(ctx context.Context,
-	chatID uint64) (data *tokens, err error) {
+	chatID uint64) (data tokens, err error) {
 
 	query := `
 			select 
 				tut.access_token, 
-				tut.refresh_token 
+				tut.refresh_token, 
+				tut.current_state
 			from twitch_user_tokens tut 
 			where 'user:read:follows' = ANY(tut."scope") 
 				and tut.chat_id = $1;
 			`
 
-	err = tn.db.GetContext(ctx, data, query, chatID)
+	err = tn.db.GetContext(ctx, &data, query, chatID)
+
+	return
+}
+
+func (tn *TwitchNotificationService) UpdateChatTokensByState(ctx context.Context, state, accessToken, refreshToken string) (err error) {
+
+	query := `
+		update twitch_user_tokens 
+			set (access_token, refresh_token, updated_at) = ($1, $2, now())
+		where current_state = $3;
+	`
+	_, err = tn.db.ExecContext(ctx, query, accessToken, refreshToken, state)
 	if err != nil {
-		return &tokens{}, errors.Wrap(err, "GetTokensByChatID getContext")
+		return err
 	}
 
 	return

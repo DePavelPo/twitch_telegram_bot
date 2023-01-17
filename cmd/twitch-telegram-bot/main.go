@@ -65,7 +65,7 @@ func main() {
 	telegaService := telegramService.NewService(telegaClient)
 	twitchService := twitchService.NewService(twitchClient, twitchOauthClient)
 
-	tns, err := notificationService.NewTwitchNotificationService(db, twitchClient)
+	tns, err := notificationService.NewTwitchNotificationService(db, twitchClient, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init notificationService: %v", err)
 	}

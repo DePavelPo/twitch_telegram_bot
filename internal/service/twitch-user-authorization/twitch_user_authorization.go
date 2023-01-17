@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"twitch_telegram_bot/internal/models"
 
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
@@ -15,9 +16,7 @@ import (
 )
 
 const (
-	twitchIDSchemeHost  string = "https://id.twitch.tv"
-	tokenInvalid        string = "token invalid"
-	refreshTokenInvalid string = "Invalid refresh token"
+	twitchIDSchemeHost string = "https://id.twitch.tv"
 )
 
 type CheckUserTokensByChatResp struct {
@@ -60,12 +59,12 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByChat(ctx context.Co
 	validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, *data.AccessToken)
 
 	if err != nil {
-		if err.Error() == tokenInvalid {
+		if err.Error() == models.TokenInvalid {
 
 			newTokens, err := tuas.twitchOauthClient.TwitchGetUserTokenRefresh(ctx, *data.RefreshToken)
 			if err != nil {
 
-				if err.Error() == refreshTokenInvalid {
+				if err.Error() == models.RefreshTokenInvalid {
 
 					return CheckUserTokensByChatResp{
 						Link: tuas.TwitchCreateOAuth2Link(ctx, data.CurrentState),
@@ -192,9 +191,14 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 			return errors.Wrap(err, "UpdateChatTokensByState")
 		}
 
+		err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+		if err != nil {
+			return errors.Wrap(err, "AddTwitchNotification")
+		}
+
 		msg := tgbotapi.NewMessage(int64(data.ChatID), "")
 
-		resp := "Sorry, the functional is not available now"
+		resp := "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
 		msg.Text = resp
 
 		_, err = bot.Send(msg)
@@ -208,12 +212,12 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 
 	_, err = tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, *data.AccessToken)
 	if err != nil {
-		if err.Error() == tokenInvalid {
+		if err.Error() == models.TokenInvalid {
 
 			newTokens, err := tuas.twitchOauthClient.TwitchGetUserTokenRefresh(ctx, *data.RefreshToken)
 			if err != nil {
 
-				if err.Error() == refreshTokenInvalid {
+				if err.Error() == models.RefreshTokenInvalid {
 
 					tokens, err := tuas.twitchOauthClient.TwitchGetUserToken(ctx, code)
 					if err != nil {
@@ -225,9 +229,14 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 						return errors.Wrap(err, "UpdateChatTokensByState")
 					}
 
+					err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+					if err != nil {
+						return errors.Wrap(err, "AddTwitchNotification")
+					}
+
 					msg := tgbotapi.NewMessage(int64(data.ChatID), "")
 
-					resp := "Sorry, the functional is not available now"
+					resp := "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
 					msg.Text = resp
 
 					_, err = bot.Send(msg)
@@ -252,9 +261,14 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 				return errors.Wrap(err, "UpdateChatTokensByState")
 			}
 
+			err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+			if err != nil {
+				return errors.Wrap(err, "AddTwitchNotification")
+			}
+
 			msg := tgbotapi.NewMessage(int64(data.ChatID), "")
 
-			resp := "Sorry, the functional is not available now"
+			resp := "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
 			msg.Text = resp
 
 			_, err = bot.Send(msg)
@@ -268,9 +282,14 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 		return errors.Wrap(err, "TwitchOAuthValidateToken")
 	}
 
+	err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+	if err != nil {
+		return errors.Wrap(err, "AddTwitchNotification")
+	}
+
 	msg := tgbotapi.NewMessage(int64(data.ChatID), "")
 
-	resp := "Sorry, the functional is not available now"
+	resp := "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
 	msg.Text = resp
 
 	_, err = bot.Send(msg)
@@ -308,10 +327,33 @@ func (tuas *TwitchUserAuthorizationService) UpdateChatTokensByState(ctx context.
 
 	query := `
 		update twitch_user_tokens 
-			set (access_token, refresh_token) = ($1, $2)
+			set (access_token, refresh_token, updated_at) = ($1, $2, now())
 		where current_state = $3;
 	`
 	_, err = tuas.db.ExecContext(ctx, query, accessToken, refreshToken, state)
+	if err != nil {
+		return err
+	}
+
+	return
+}
+
+func (tuas *TwitchUserAuthorizationService) AddTwitchNotification(ctx context.Context, chatId uint64, user string, notiType models.StreamNotificationType) (err error) {
+
+	query := `
+				insert into twitch_notifications (chat_id, twitch_user, request_type) 
+					values ($1, $2, $3)
+				on conflict (chat_id, twitch_user, request_type) 
+					do update
+					set (request_type, is_active) = ($3, true);
+	`
+
+	res, err := tuas.db.ExecContext(ctx, query, chatId, user, notiType)
+	if err != nil {
+		return err
+	}
+
+	_, err = res.RowsAffected()
 	if err != nil {
 		return err
 	}

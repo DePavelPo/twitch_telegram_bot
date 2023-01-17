@@ -9,18 +9,24 @@ import (
 	"github.com/sirupsen/logrus"
 
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
-
+	twitch_oauth_client "twitch_telegram_bot/internal/client/twitch-oauth-client"
 )
 
 type TwitchNotificationService struct {
-	db           *sqlx.DB
-	twitchClient *twitch_client.TwitchClient
+	db                *sqlx.DB
+	twitchClient      *twitch_client.TwitchClient
+	twitchOauthClient *twitch_oauth_client.TwitchOauthClient
 }
 
-func NewTwitchNotificationService(db *sqlx.DB, twitchClient *twitch_client.TwitchClient) (*TwitchNotificationService, error) {
+func NewTwitchNotificationService(
+	db *sqlx.DB,
+	twitchClient *twitch_client.TwitchClient,
+	twitchOauthClient *twitch_oauth_client.TwitchOauthClient,
+) (*TwitchNotificationService, error) {
 	service := &TwitchNotificationService{
-		db:           db,
-		twitchClient: twitchClient,
+		db:                db,
+		twitchClient:      twitchClient,
+		twitchOauthClient: twitchOauthClient,
 	}
 
 	ctx := context.Background()
