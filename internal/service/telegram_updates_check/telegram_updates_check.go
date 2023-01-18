@@ -31,16 +31,17 @@ const (
 type teleCommands string
 
 const (
-	telegramUpdatesCheckBGSync              = "telegramUpdatesCheck_BGSync"
-	startCommand               teleCommands = "/start"
-	pingCommand                teleCommands = "/ping"
-	commands                   teleCommands = "/commands"
-	jokeCommand                teleCommands = "/anec"
-	twitchUserCommand          teleCommands = "/twitch_user"
-	twitchBanTest              teleCommands = "/twitch_ban_test"
-	twitchStreamNotifi         teleCommands = "/twitch_stream_notification"
-	twitchFollowedStreamNotify teleCommands = "/twitch_followed_notification"
-	twitchDropStreamNotifi     teleCommands = "/twitch_drop_stream_notification"
+	telegramUpdatesCheckBGSync                  = "telegramUpdatesCheck_BGSync"
+	startCommand                   teleCommands = "/start"
+	pingCommand                    teleCommands = "/ping"
+	commands                       teleCommands = "/commands"
+	jokeCommand                    teleCommands = "/anec"
+	twitchUserCommand              teleCommands = "/twitch_user"
+	twitchBanTest                  teleCommands = "/twitch_ban_test"
+	twitchStreamNotifi             teleCommands = "/twitch_stream_notify"
+	twitchDropStreamNotifi         teleCommands = "/twitch_drop_stream_notify"
+	twitchFollowedStreamNotify     teleCommands = "/twitch_followed_notify"
+	twitchDropFollowedStreamNotify teleCommands = "/twitch_drop_followed_notify"
 )
 
 type TelegramUpdatesCheckService struct {
@@ -255,7 +256,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				if err != nil {
 					if err.Error() == "notification not found" {
 						logrus.Infof("notification by chatId %d user %s not found", chatId, userLogin)
-						msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such an application was not created"
+						msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such request was not created"
 						msg.ReplyToMessageID = updateInfo.Message.MessageID
 						break
 					}
@@ -280,6 +281,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				if data.Link != "" {
 
+					// TODO: moved to universal func
 					resp := "To use this functionality, follow the link and provide access to the necessary information"
 					msg.Text = resp
 
@@ -308,6 +310,25 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				}
 
 				msg.Text = "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
+				msg.ReplyToMessageID = updateInfo.Message.MessageID
+
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropFollowedStreamNotify)):
+
+				err := tmcs.notificationService.SetInactiveNotificationFollowed(ctx, uint64(chatId))
+				if err != nil {
+					if err.Error() == "notification not found" {
+						logrus.Infof("followed streams notification by chatId %d not found", chatId)
+						msg.Text = "No requests for notifications were found 😕"
+						msg.ReplyToMessageID = updateInfo.Message.MessageID
+						break
+					}
+					logrus.Infof("Set inactive twitch notification error: %v", err)
+					msg.Text = somethingWrong
+					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					break
+				}
+
+				msg.Text = "Notifications were disabled successfully"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
 			}

@@ -16,6 +16,7 @@ const (
 	twitchNotificationBGSync = "twitchNotification_BGSync"
 )
 
+// TODO: check how long stream is comming. Throw notification only if stream is comming less than 10 minutes
 func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
 	var lastId uint64 = 0
@@ -223,7 +224,7 @@ func (tn *TwitchNotificationService) AddTwitchNotification(ctx context.Context, 
 					values ($1, $2, $3)
 				on conflict (chat_id, twitch_user, request_type) 
 					do update
-					set (request_type, is_active) = ($3, true);
+					set (request_type, is_active, updated_at) = ($3, true, now());
 	`
 
 	res, err := tn.db.ExecContext(ctx, query, chatId, user, notiType)
@@ -243,11 +244,36 @@ func (tn *TwitchNotificationService) SetInactiveNotificationByUser(ctx context.C
 
 	query := `
 				update twitch_notifications 
-					set is_active = false
+					set (is_active, updated_at) = (false, now())
 					where (chat_id, twitch_user, request_type) = ($1, $2, 'by_user');
 	`
 
 	res, err := tn.db.ExecContext(ctx, query, chatId, user)
+	if err != nil {
+		return err
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if n < 1 {
+		return errors.New("notification not found")
+	}
+
+	return
+}
+
+func (tn *TwitchNotificationService) SetInactiveNotificationFollowed(ctx context.Context, chatId uint64) (err error) {
+
+	query := `
+				update twitch_notifications 
+					set (is_active, updated_at) = (false, now())
+					where (chat_id, request_type) = ($1, 'followed');
+	`
+
+	res, err := tn.db.ExecContext(ctx, query, chatId)
 	if err != nil {
 		return err
 	}
