@@ -281,23 +281,12 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				if data.Link != "" {
 
-					// TODO: moved to universal func
-					resp := "To use this functionality, follow the link and provide access to the necessary information"
-					msg.Text = resp
+					logrus.Info(data.Link)
 
-					board := make([][]tgbotapi.InlineKeyboardButton, 1)
-					for i := range board {
-						board[i] = make([]tgbotapi.InlineKeyboardButton, 1)
-					}
+					msg = createTwitchOath2LinkResp(msg, data.Link, updateInfo.Message.MessageID)
 
-					board[0][0].Text = "Open Link"
-					board[0][0].URL = &data.Link
+					logrus.Info(msg)
 
-					msg.ReplyMarkup = tgbotapi.InlineKeyboardMarkup{
-						InlineKeyboard: board,
-					}
-
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
@@ -374,4 +363,27 @@ func validateText(text string) (str string, isValid bool) {
 	}
 
 	return words[0], true
+}
+
+func createTwitchOath2LinkResp(msg tgbotapi.MessageConfig, link string, messageID int) tgbotapi.MessageConfig {
+
+	resp := "To use this functionality, follow the link and provide access to the necessary information"
+	msg.Text = resp
+
+	board := make([][]tgbotapi.InlineKeyboardButton, 1)
+	for i := range board {
+		board[i] = make([]tgbotapi.InlineKeyboardButton, 1)
+	}
+
+	board[0][0].Text = "Open Link"
+	board[0][0].URL = &link
+
+	msg.ReplyMarkup = tgbotapi.InlineKeyboardMarkup{
+		InlineKeyboard: board,
+	}
+
+	msg.ReplyToMessageID = messageID
+
+	return msg
+
 }

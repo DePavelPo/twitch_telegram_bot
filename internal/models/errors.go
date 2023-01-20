@@ -3,6 +3,7 @@ package models
 const (
 	TokenInvalid        string = "token invalid"
 	RefreshTokenInvalid string = "Invalid refresh token"
+	InvalidOathToken    string = "Invalid OAuth token"
 )
 
 type GetUserUnauthorized struct {

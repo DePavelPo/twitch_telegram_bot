@@ -3,8 +3,8 @@ package notification
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strconv"
+	"time"
 	"twitch_telegram_bot/internal/models"
 
 	"github.com/jmoiron/sqlx"
@@ -16,10 +16,12 @@ const (
 	twitchNotificationBGSync = "twitchNotification_BGSync"
 )
 
-// TODO: check how long stream is comming. Throw notification only if stream is comming less than 10 minutes
 func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
-	var lastId uint64 = 0
+	var (
+		lastId      uint64    = 0
+		currentTime time.Time = time.Now()
+	)
 
 	for {
 
@@ -50,47 +52,44 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
 				if tokens.AccessToken != nil {
 
-					validData, err := tn.twitchOauthClient.TwitchOAuthValidateToken(ctx, *tokens.AccessToken)
+					var streams *models.Streams
+
+					streams, err = tn.twitchClient.GetActiveFollowedStreams(ctx, notification.TwitchUser, *tokens.AccessToken)
 					if err != nil {
-						if err.Error() == models.TokenInvalid {
+
+						if err.Error() == models.InvalidOathToken {
 
 							newTokens, err := tn.twitchOauthClient.TwitchGetUserTokenRefresh(ctx, *tokens.RefreshToken)
 							if err != nil {
 
 								if err.Error() == models.RefreshTokenInvalid {
 
-									logrus.Infof("Sync notification error: %s", models.RefreshTokenInvalid)
+									logrus.Errorf("Sync notification error: %s", models.RefreshTokenInvalid)
 									break
 
 								}
 							}
 
-							validData, err = tn.twitchOauthClient.TwitchOAuthValidateToken(ctx, newTokens.AccessToken)
-							if err != nil {
-
-								logrus.Infof("Sync notification TwitchOAuthValidateToken error: %s", models.RefreshTokenInvalid)
-								break
-
-							}
-
 							err = tn.UpdateChatTokensByState(ctx, tokens.State, newTokens.AccessToken, newTokens.RefreshToken)
 							if err != nil {
 
-								logrus.Infof("Sync notification UpdateChatTokensByState error: %s", models.RefreshTokenInvalid)
+								logrus.Errorf("Sync notification UpdateChatTokensByState error: %v", err)
 								break
 
 							}
 
-							tokens.AccessToken = &newTokens.AccessToken
+							streams, err = tn.twitchClient.GetActiveFollowedStreams(ctx, notification.TwitchUser, newTokens.AccessToken)
+							if err != nil {
+								logrus.Errorf("Sync notification GetActiveFollowedStreams error: %v", err)
+								break
+							}
+
+						} else {
+
+							return errors.Wrap(err, "GetActiveFollowedStreams")
 
 						}
-					}
 
-					fmt.Println(*tokens.AccessToken)
-
-					streams, err := tn.twitchClient.GetActiveFollowedStreams(ctx, validData.UserId, *tokens.AccessToken)
-					if err != nil {
-						return errors.Wrap(err, "GetActiveStreamInfoByUsers")
 					}
 
 					if streams != nil {
@@ -103,21 +102,24 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
 							streamIdInt, err := strconv.ParseUint(streamInfo.StreamId, 10, 64)
 							if err != nil {
-								logrus.Infof("cannot parse %s to uint64", streamInfo.StreamId)
+								logrus.Errorf("cannot parse %s to uint64", streamInfo.StreamId)
 								tx.Rollback()
 								continue
 							}
 
-							err = tn.AddTwitchNotificationLog(ctx, tx, streamIdInt, notification.ID)
+							err = tn.AddTwitchNotificationLog(ctx, tx, streamIdInt, notification.ChatId)
 							if err != nil {
-								logrus.Infof("cannot add notification log for %d", streamIdInt)
+								logrus.Errorf("cannot add notification log for %d", streamIdInt)
 								tx.Rollback()
 								continue
 							}
-							err = tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
-							if err != nil {
-								tx.Rollback()
-								return errors.Wrap(err, "ThrowNotification")
+
+							if currentTime.Before(streamInfo.StartedAt.Add(time.Minute * 10)) {
+								err = tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
+								if err != nil {
+									tx.Rollback()
+									return errors.Wrap(err, "ThrowNotification")
+								}
 							}
 
 							if err = tx.Commit(); err != nil {
@@ -153,21 +155,26 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
 						streamIdInt, err := strconv.ParseUint(streamInfo.StreamId, 10, 64)
 						if err != nil {
-							logrus.Infof("cannot parse %s to uint64", streamInfo.StreamId)
+							logrus.Errorf("cannot parse %s to uint64", streamInfo.StreamId)
 							tx.Rollback()
 							continue
 						}
 
-						err = tn.AddTwitchNotificationLog(ctx, tx, streamIdInt, notification.ID)
+						err = tn.AddTwitchNotificationLog(ctx, tx, streamIdInt, notification.ChatId)
 						if err != nil {
-							logrus.Infof("cannot add notification log for %d", streamIdInt)
+							logrus.Errorf("cannot add notification log for %d", streamIdInt)
 							tx.Rollback()
 							continue
 						}
-						err = tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
-						if err != nil {
-							tx.Rollback()
-							return errors.Wrap(err, "ThrowNotification")
+
+						if currentTime.Before(streamInfo.StartedAt.Add(time.Minute * 10)) {
+
+							err = tn.ThrowNotification(ctx, streamInfo, notification.ChatId)
+							if err != nil {
+								tx.Rollback()
+								return errors.Wrap(err, "ThrowNotification")
+							}
+
 						}
 
 						if err = tx.Commit(); err != nil {
@@ -290,15 +297,15 @@ func (tn *TwitchNotificationService) SetInactiveNotificationFollowed(ctx context
 	return
 }
 
-func (tn *TwitchNotificationService) AddTwitchNotificationLog(ctx context.Context, tx *sqlx.Tx, streamId, requestId uint64) (err error) {
+func (tn *TwitchNotificationService) AddTwitchNotificationLog(ctx context.Context, tx *sqlx.Tx, streamId, chatId uint64) (err error) {
 
 	query := `
-				insert into twitch_notifications_log (stream_id, request_id) 
+				insert into twitch_notifications_log (stream_id, chat_id) 
 					values ($1, $2)
-				on conflict (stream_id, request_id) do nothing;
+				on conflict (stream_id, chat_id) do nothing;
 	`
 
-	res, err := tx.ExecContext(ctx, query, streamId, requestId)
+	res, err := tx.ExecContext(ctx, query, streamId, chatId)
 	if err != nil {
 		return err
 	}
@@ -326,12 +333,9 @@ func (tn *TwitchNotificationService) GetTwitchNotificationLogByStreamId(ctx cont
 
 	query := `
 				select 
-					tn.chat_id, 
-					tn.twitch_user, 
+					tnl.chat_id,  
 					tnl.stream_id 
-				from twitch_notifications tn 
-				left join twitch_notifications_log tnl 
-					on tn.id = tnl.request_id
+				from twitch_notifications_log tnl 
 				where tnl.stream_id = $1;
 			`
 

@@ -191,7 +191,12 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 			return errors.Wrap(err, "UpdateChatTokensByState")
 		}
 
-		err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+		validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, tokens.AccessToken)
+		if err != nil {
+			return errors.Wrap(err, "TwitchOAuthValidateToken")
+		}
+
+		err = tuas.AddTwitchNotification(ctx, data.ChatID, validData.UserId, models.NotificationFollowed)
 		if err != nil {
 			return errors.Wrap(err, "AddTwitchNotification")
 		}
@@ -210,7 +215,7 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 
 	}
 
-	_, err = tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, *data.AccessToken)
+	validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, *data.AccessToken)
 	if err != nil {
 		if err.Error() == models.TokenInvalid {
 
@@ -224,12 +229,17 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 						return errors.Wrap(err, "TwitchGetUserToken")
 					}
 
+					validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, tokens.AccessToken)
+					if err != nil {
+						return errors.Wrap(err, "TwitchOAuthValidateToken")
+					}
+
 					err = tuas.UpdateChatTokensByState(ctx, state, tokens.AccessToken, tokens.RefreshToken)
 					if err != nil {
 						return errors.Wrap(err, "UpdateChatTokensByState")
 					}
 
-					err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+					err = tuas.AddTwitchNotification(ctx, data.ChatID, validData.UserId, models.NotificationFollowed)
 					if err != nil {
 						return errors.Wrap(err, "AddTwitchNotification")
 					}
@@ -251,7 +261,7 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 				return errors.Wrap(err, "TwitchGetUserTokenRefresh")
 			}
 
-			_, err = tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, newTokens.AccessToken)
+			validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, newTokens.AccessToken)
 			if err != nil {
 				return errors.Wrap(err, "TwitchOAuthValidateToken")
 			}
@@ -261,7 +271,7 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 				return errors.Wrap(err, "UpdateChatTokensByState")
 			}
 
-			err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+			err = tuas.AddTwitchNotification(ctx, data.ChatID, validData.UserId, models.NotificationFollowed)
 			if err != nil {
 				return errors.Wrap(err, "AddTwitchNotification")
 			}
@@ -282,7 +292,7 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 		return errors.Wrap(err, "TwitchOAuthValidateToken")
 	}
 
-	err = tuas.AddTwitchNotification(ctx, data.ChatID, "", models.NotificationFollowed)
+	err = tuas.AddTwitchNotification(ctx, data.ChatID, validData.UserId, models.NotificationFollowed)
 	if err != nil {
 		return errors.Wrap(err, "AddTwitchNotification")
 	}
