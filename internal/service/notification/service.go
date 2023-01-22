@@ -4,27 +4,28 @@ import (
 	"context"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
 	twitch_oauth_client "twitch_telegram_bot/internal/client/twitch-oauth-client"
+
+	dbRepository "twitch_telegram_bot/db/repository"
 )
 
 type TwitchNotificationService struct {
-	db                *sqlx.DB
+	dbRepo            *dbRepository.DBRepository
 	twitchClient      *twitch_client.TwitchClient
 	twitchOauthClient *twitch_oauth_client.TwitchOauthClient
 }
 
 func NewTwitchNotificationService(
-	db *sqlx.DB,
+	dbRepo *dbRepository.DBRepository,
 	twitchClient *twitch_client.TwitchClient,
 	twitchOauthClient *twitch_oauth_client.TwitchOauthClient,
 ) (*TwitchNotificationService, error) {
 	service := &TwitchNotificationService{
-		db:                db,
+		dbRepo:            dbRepo,
 		twitchClient:      twitchClient,
 		twitchOauthClient: twitchOauthClient,
 	}

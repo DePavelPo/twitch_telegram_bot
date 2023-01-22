@@ -7,12 +7,6 @@ import (
 	"sync"
 	"time"
 
-	notificationService "twitch_telegram_bot/internal/service/notification"
-	teleUpdatesCheckService "twitch_telegram_bot/internal/service/telegram_updates_check"
-	twitchUserAuthservice "twitch_telegram_bot/internal/service/twitch-user-authorization"
-
-	twitchTokenService "twitch_telegram_bot/internal/service/twitch_token"
-
 	telegramClient "twitch_telegram_bot/internal/client/telegram-client"
 	twitchClient "twitch_telegram_bot/internal/client/twitch-client"
 	twitchOauthClient "twitch_telegram_bot/internal/client/twitch-oauth-client"
@@ -20,8 +14,14 @@ import (
 	telegramHandler "twitch_telegram_bot/internal/handlers/telegram"
 	twitchHandler "twitch_telegram_bot/internal/handlers/twitch"
 
+	notificationService "twitch_telegram_bot/internal/service/notification"
 	telegramService "twitch_telegram_bot/internal/service/telegram"
+	teleUpdatesCheckService "twitch_telegram_bot/internal/service/telegram_updates_check"
 	twitchService "twitch_telegram_bot/internal/service/twitch"
+	twitchUserAuthservice "twitch_telegram_bot/internal/service/twitch-user-authorization"
+	twitchTokenService "twitch_telegram_bot/internal/service/twitch_token"
+
+	dbRepository "twitch_telegram_bot/db/repository"
 
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
@@ -54,7 +54,9 @@ func main() {
 		twitchOauthClient = twitchOauthClient.NewTwitchOauthClient()
 	)
 
-	tts, err := twitchTokenService.NewTwitchTokenService(db, twitchOauthClient)
+	dbRepo := dbRepository.NewDBRepository(db)
+
+	tts, err := twitchTokenService.NewTwitchTokenService(dbRepo, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init twitchTokenService: %v", err)
 	}
@@ -65,18 +67,18 @@ func main() {
 	telegaService := telegramService.NewService(telegaClient)
 	twitchService := twitchService.NewService(twitchClient, twitchOauthClient)
 
-	tns, err := notificationService.NewTwitchNotificationService(db, twitchClient, twitchOauthClient)
+	tns, err := notificationService.NewTwitchNotificationService(dbRepo, twitchClient, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init notificationService: %v", err)
 	}
 	go tns.SyncBg(ctx, time.Minute*5)
 
-	tuas, err := twitchUserAuthservice.NewTwitchUserAuthorizationService(db, twitchOauthClient)
+	tuas, err := twitchUserAuthservice.NewTwitchUserAuthorizationService(dbRepo, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init twitchUserAuthservice: %v", err)
 	}
 
-	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, tns, tuas, telegaService, twitchOauthClient)
+	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, dbRepo, tns, tuas, telegaService, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
 	}

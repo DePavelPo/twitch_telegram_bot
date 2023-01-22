@@ -17,6 +17,8 @@ import (
 
 	telegram_service "twitch_telegram_bot/internal/service/telegram"
 
+	dbRepository "twitch_telegram_bot/db/repository"
+
 	text_formater "twitch_telegram_bot/internal/utils/text-formater"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -46,6 +48,7 @@ const (
 
 type TelegramUpdatesCheckService struct {
 	twitchClient          *twitch_client.TwitchClient
+	dbRepo                *dbRepository.DBRepository
 	notificationService   *notificationService.TwitchNotificationService
 	twitchUserAuthservice *twitchUserAuthservice.TwitchUserAuthorizationService
 
@@ -56,6 +59,7 @@ type TelegramUpdatesCheckService struct {
 
 func NewTelegramUpdatesCheckService(
 	twitchClient *twitch_client.TwitchClient,
+	dbRepo *dbRepository.DBRepository,
 	notifiService *notificationService.TwitchNotificationService,
 	twitchUserAuthservice *twitchUserAuthservice.TwitchUserAuthorizationService,
 	telegramService *telegram_service.TelegramService,
@@ -63,6 +67,7 @@ func NewTelegramUpdatesCheckService(
 ) (*TelegramUpdatesCheckService, error) {
 	return &TelegramUpdatesCheckService{
 		twitchClient:          twitchClient,
+		dbRepo:                dbRepo,
 		notificationService:   notifiService,
 		twitchUserAuthservice: twitchUserAuthservice,
 		telegramService:       telegramService,
@@ -123,7 +128,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
 				if err != nil {
-					logrus.Infof("GetBotCommands error: %v", err)
+					logrus.Errorf("GetBotCommands error: %v", err)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
@@ -153,7 +158,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(commands)):
 				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
 				if err != nil {
-					logrus.Infof("GetBotCommands error: %v", err)
+					logrus.Errorf("GetBotCommands error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
@@ -221,16 +226,16 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				userLogin, isValid := validateText(commandText)
 				if userLogin == "" || !isValid {
-					msg.Text = invalidReq + exampleText
+					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchStreamNotifi, twitchStreamNotifi)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
 				userLogin = text_formater.ToLower(userLogin)
 
-				err := tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), userLogin, models.NotificationByUser)
+				err := tmcs.dbRepo.AddTwitchNotification(ctx, uint64(chatId), userLogin, models.NotificationByUser)
 				if err != nil {
-					logrus.Infof("Add twitch notification request error: %v", err)
+					logrus.Errorf("Add twitch notification request error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
@@ -245,22 +250,22 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				userLogin, isValid := validateText(commandText)
 				if userLogin == "" || !isValid {
-					msg.Text = invalidReq + exampleText
+					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchDropStreamNotifi, twitchDropStreamNotifi)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
 				}
 
 				userLogin = text_formater.ToLower(userLogin)
 
-				err := tmcs.notificationService.SetInactiveNotificationByUser(ctx, uint64(chatId), userLogin)
+				err := tmcs.dbRepo.SetInactiveNotificationByType(ctx, uint64(chatId), userLogin, models.NotificationByUser)
 				if err != nil {
 					if err.Error() == "notification not found" {
-						logrus.Infof("notification by chatId %d user %s not found", chatId, userLogin)
+						logrus.Errorf("notification by chatId %d user %s not found", chatId, userLogin)
 						msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such request was not created"
 						msg.ReplyToMessageID = updateInfo.Message.MessageID
 						break
 					}
-					logrus.Infof("Set inactive twitch notification error: %v", err)
+					logrus.Errorf("Set inactive twitch notification error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
@@ -273,7 +278,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				data, err := tmcs.twitchUserAuthservice.CheckUserTokensByChat(ctx, uint64(chatId))
 				if err != nil {
-					logrus.Infof("CheckUserTokensByChat error: %v", err)
+					logrus.Errorf("CheckUserTokensByChat error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
@@ -281,18 +286,17 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				if data.Link != "" {
 
-					logrus.Info(data.Link)
+					resp := "To use this functionality, follow the link and provide access to the necessary information"
+					msg.Text = resp
 
-					msg = createTwitchOath2LinkResp(msg, data.Link, updateInfo.Message.MessageID)
-
-					logrus.Info(msg)
+					msg = createTwitchOath2LinkResp(msg, data.Link, "Open Link", updateInfo.Message.MessageID)
 
 					break
 				}
 
-				err = tmcs.notificationService.AddTwitchNotification(ctx, uint64(chatId), data.UserID, models.NotificationFollowed)
+				err = tmcs.dbRepo.AddTwitchNotification(ctx, uint64(chatId), data.UserID, models.NotificationFollowed)
 				if err != nil {
-					logrus.Infof("Add twitch notification request error: %v", err)
+					logrus.Errorf("Add twitch notification request error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
@@ -303,15 +307,15 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropFollowedStreamNotify)):
 
-				err := tmcs.notificationService.SetInactiveNotificationFollowed(ctx, uint64(chatId))
+				err := tmcs.dbRepo.SetInactiveNotificationByType(ctx, uint64(chatId), "", models.NotificationFollowed)
 				if err != nil {
 					if err.Error() == "notification not found" {
-						logrus.Infof("followed streams notification by chatId %d not found", chatId)
+						logrus.Errorf("followed streams notification by chatId %d not found", chatId)
 						msg.Text = "No requests for notifications were found 😕"
 						msg.ReplyToMessageID = updateInfo.Message.MessageID
 						break
 					}
-					logrus.Infof("Set inactive twitch notification error: %v", err)
+					logrus.Errorf("Set inactive twitch notification error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					break
@@ -324,7 +328,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			_, err = bot.Send(msg)
 			if err != nil {
-				logrus.Infof("telegram send message error: %v", err)
+				logrus.Errorf("telegram send message error: %v", err)
 			}
 		}
 	}
@@ -365,17 +369,14 @@ func validateText(text string) (str string, isValid bool) {
 	return words[0], true
 }
 
-func createTwitchOath2LinkResp(msg tgbotapi.MessageConfig, link string, messageID int) tgbotapi.MessageConfig {
-
-	resp := "To use this functionality, follow the link and provide access to the necessary information"
-	msg.Text = resp
+func createTwitchOath2LinkResp(msg tgbotapi.MessageConfig, link, text string, messageID int) tgbotapi.MessageConfig {
 
 	board := make([][]tgbotapi.InlineKeyboardButton, 1)
 	for i := range board {
 		board[i] = make([]tgbotapi.InlineKeyboardButton, 1)
 	}
 
-	board[0][0].Text = "Open Link"
+	board[0][0].Text = text
 	board[0][0].URL = &link
 
 	msg.ReplyMarkup = tgbotapi.InlineKeyboardMarkup{

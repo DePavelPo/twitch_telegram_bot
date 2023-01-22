@@ -1,19 +1,22 @@
 package twitch_user_authorization
 
 import (
-	"github.com/jmoiron/sqlx"
-
 	twitch_oauth_client "twitch_telegram_bot/internal/client/twitch-oauth-client"
+
+	dbRepository "twitch_telegram_bot/db/repository"
 )
 
 type TwitchUserAuthorizationService struct {
-	db                *sqlx.DB
+	dbRepo            *dbRepository.DBRepository
 	twitchOauthClient *twitch_oauth_client.TwitchOauthClient
 }
 
-func NewTwitchUserAuthorizationService(db *sqlx.DB, twitchOauthClient *twitch_oauth_client.TwitchOauthClient) (*TwitchUserAuthorizationService, error) {
+func NewTwitchUserAuthorizationService(
+	dbRepo *dbRepository.DBRepository,
+	twitchOauthClient *twitch_oauth_client.TwitchOauthClient,
+) (*TwitchUserAuthorizationService, error) {
 	return &TwitchUserAuthorizationService{
-		db:                db,
+		dbRepo:            dbRepo,
 		twitchOauthClient: twitchOauthClient,
 	}, nil
 }

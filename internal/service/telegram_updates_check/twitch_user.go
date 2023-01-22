@@ -11,9 +11,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var exampleText string = `Request example:
-	/twitch_user welovegames
-	/twitch_user WELOVEGAMES
+var userCustomExampleText string = `Request example:
+	%s welovegames
+	%s WELOVEGAMES
 	`
 
 func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg tgbotapi.MessageConfig, updateInfo tgbotapi.Update) tgbotapi.MessageConfig {
@@ -22,7 +22,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 
 	userLogin, isValid := validateText(commandText)
 	if userLogin == "" || !isValid {
-		msg.Text = invalidReq + exampleText
+		msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchUserCommand, twitchUserCommand)
 		msg.ReplyToMessageID = updateInfo.Message.MessageID
 		return msg
 	}
@@ -108,11 +108,12 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 	msg.Text = fmt.Sprintf(`
 	%s
 	Stream status: %s
-	%s
 	`,
 		msg.Text,
 		streamStatus,
-		fmt.Sprintf("https://www.twitch.tv/%s", user.Login))
+	)
+
+	msg = createTwitchOath2LinkResp(msg, fmt.Sprintf("https://www.twitch.tv/%s", user.Login), "Open the channel", updateInfo.Message.MessageID)
 
 	return msg
 }

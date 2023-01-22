@@ -1,5 +1,12 @@
 package models
 
+type Scope string
+
+var (
+	UserReadFollows Scope = "user:read:follows"
+	ChannelReadSubs Scope = "channel:read:subscriptions"
+)
+
 type TwitchOautGetTokenResponse struct {
 	Token     string `json:"access_token"`
 	ExpiresIn uint64 `json:"expires_in"`
@@ -20,4 +27,16 @@ type TwitchOautGetUserTokenResponse struct {
 	RefreshToken string   `json:"refresh_token"`
 	Scope        []string `json:"scope"`
 	TokenType    string   `json:"token_type"`
+}
+
+type TokensWithChatID struct {
+	AccessToken  *string `db:"access_token"`
+	RefreshToken *string `db:"refresh_token"`
+	ChatID       uint64  `db:"chat_id"`
+}
+
+type TokenWithState struct {
+	AccessToken  *string `db:"access_token"`
+	RefreshToken *string `db:"refresh_token"`
+	State        string  `db:"current_state"`
 }
