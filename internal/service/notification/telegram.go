@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
+	"strings"
 	"twitch_telegram_bot/internal/models"
+
+	formater "twitch_telegram_bot/internal/utils/formater"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
@@ -18,46 +20,33 @@ func (tn *TwitchNotificationService) ThrowNotification(ctx context.Context, stre
 		return err
 	}
 
-	// для подробных логов
-	bot.Debug = true
+	var photoLink string
+	// TODO: add default photo if current url not created
+	if strings.Contains(stream.ThumbnailUrl, "{width}x{height}") {
+		photoLink = strings.Replace(stream.ThumbnailUrl, "{width}x{height}", "1920x1080", -1)
+	}
 
-	msg := tgbotapi.NewMessage(int64(chatId), "")
+	photo := tgbotapi.NewPhoto(int64(chatId), tgbotapi.FileURL(photoLink))
 
 	twitchLink := fmt.Sprintf("https://www.twitch.tv/%s", stream.UserLogin)
 
-	msg.Text = fmt.Sprintf(`
-	%s stream is online!
+	photo.Caption = fmt.Sprintf(`
+	▶️ %s stream is online!
 	Title: %s,
 	Current stream duration: %s,
-	Count of viewers: %d,
-	%s
+	Count of viewers: %d
 	`,
 		stream.UserName,
 		stream.Title,
-		createStreamDuration(stream.StartedAt),
-		stream.ViewerCount,
-		twitchLink)
+		formater.CreateStreamDuration(stream.StartedAt),
+		stream.ViewerCount)
 
-	_, err = bot.Send(msg)
+	photo = formater.CreateTelegramSingleButtonLinkForPhoto(photo, twitchLink, "Open the channel", 0)
+
+	_, err = bot.Send(photo)
 	if err != nil {
 		logrus.Infof("ThrowNotification: telegram send message error: %v", err)
 	}
 
 	return nil
-}
-
-func createStreamDuration(startedAt time.Time) string {
-
-	location := time.FixedZone("MSK", 3*60*60)
-	streamStartTime := startedAt.In(location)
-
-	streamDuration := time.Now().Sub(streamStartTime)
-	hours := streamDuration / time.Hour
-	streamDuration = streamDuration % time.Hour
-	minutes := streamDuration / time.Minute
-	streamDuration = streamDuration % time.Minute
-	seconds := streamDuration / time.Second
-	streamDurationStr := fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-
-	return streamDurationStr
 }

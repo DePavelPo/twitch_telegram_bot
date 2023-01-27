@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	text_formater "twitch_telegram_bot/internal/utils/text-formater"
+	formater "twitch_telegram_bot/internal/utils/formater"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
@@ -16,36 +16,41 @@ var userCustomExampleText string = `Request example:
 	%s WELOVEGAMES
 	`
 
-func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg tgbotapi.MessageConfig, updateInfo tgbotapi.Update) tgbotapi.MessageConfig {
+func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
+	ctx context.Context,
+	photo tgbotapi.PhotoConfig,
+	updateInfo tgbotapi.Update,
+	chatID int64,
+) tgbotapi.PhotoConfig {
 
 	commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchUserCommand)):]
 
 	userLogin, isValid := validateText(commandText)
 	if userLogin == "" || !isValid {
-		msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchUserCommand, twitchUserCommand)
-		msg.ReplyToMessageID = updateInfo.Message.MessageID
-		return msg
+		photo.Caption = invalidReq + fmt.Sprintf(userCustomExampleText, twitchUserCommand, twitchUserCommand)
+		photo.ReplyToMessageID = updateInfo.Message.MessageID
+		return photo
 	}
 
-	userLogin = text_formater.ToLower(userLogin)
+	userLogin = formater.ToLower(userLogin)
 
 	users, err := tmcs.twitchClient.GetUserInfo(ctx, []string{userLogin})
 	if err != nil {
 		logrus.Error(err)
-		msg.Text = somethingWrong
-		msg.ReplyToMessageID = updateInfo.Message.MessageID
-		return msg
+		photo.Caption = somethingWrong
+		photo.ReplyToMessageID = updateInfo.Message.MessageID
+		return photo
 	}
 
 	if users == nil {
-		msg.Text = "User not found"
-		msg.ReplyToMessageID = updateInfo.Message.MessageID
-		return msg
+		photo.Caption = "User not found"
+		photo.ReplyToMessageID = updateInfo.Message.MessageID
+		return photo
 	}
 	if len(users.Data) < 1 {
-		msg.Text = "User not found"
-		msg.ReplyToMessageID = updateInfo.Message.MessageID
-		return msg
+		photo.Caption = "User not found"
+		photo.ReplyToMessageID = updateInfo.Message.MessageID
+		return photo
 	}
 
 	user := users.Data[0]
@@ -77,7 +82,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 		userBroadcasterType = "user"
 	}
 
-	msg.Text = fmt.Sprintf(`
+	photo.Caption = fmt.Sprintf(`
 	User information:
 	User: %s
 	Account creation date: %s
@@ -89,7 +94,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 		userType,
 		userBroadcasterType)
 
-	msg.ReplyToMessageID = updateInfo.Message.MessageID
+	photo.ReplyToMessageID = updateInfo.Message.MessageID
 
 	var streamStatus = "undefined"
 	streams, err := tmcs.twitchClient.GetActiveStreamInfoByUsers(ctx, []string{userLogin})
@@ -105,15 +110,19 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(ctx context.Context, msg
 		}
 	}
 
-	msg.Text = fmt.Sprintf(`
+	photo.Caption = fmt.Sprintf(`
 	%s
 	Stream status: %s
 	`,
-		msg.Text,
+		photo.Caption,
 		streamStatus,
 	)
 
-	msg = createTwitchOath2LinkResp(msg, fmt.Sprintf("https://www.twitch.tv/%s", user.Login), "Open the channel", updateInfo.Message.MessageID)
+	newPhoto := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(user.ProfileImageUrl))
+	newPhoto.ReplyToMessageID = updateInfo.Message.MessageID
+	newPhoto.Caption = photo.Caption
 
-	return msg
+	newPhoto = formater.CreateTelegramSingleButtonLinkForPhoto(newPhoto, fmt.Sprintf("https://www.twitch.tv/%s", user.Login), "Open the channel", updateInfo.Message.MessageID)
+
+	return newPhoto
 }

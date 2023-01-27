@@ -12,6 +12,7 @@ import (
 	notificationService "twitch_telegram_bot/internal/service/notification"
 	twitchUserAuthservice "twitch_telegram_bot/internal/service/twitch-user-authorization"
 
+	fileClient "twitch_telegram_bot/internal/client/file"
 	twitch_client "twitch_telegram_bot/internal/client/twitch-client"
 	twitch_oauth_client "twitch_telegram_bot/internal/client/twitch-oauth-client"
 
@@ -19,7 +20,7 @@ import (
 
 	dbRepository "twitch_telegram_bot/db/repository"
 
-	text_formater "twitch_telegram_bot/internal/utils/text-formater"
+	formater "twitch_telegram_bot/internal/utils/formater"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
@@ -47,7 +48,9 @@ const (
 )
 
 type TelegramUpdatesCheckService struct {
-	twitchClient          *twitch_client.TwitchClient
+	twitchClient *twitch_client.TwitchClient
+	fClient      *fileClient.FileClient
+
 	dbRepo                *dbRepository.DBRepository
 	notificationService   *notificationService.TwitchNotificationService
 	twitchUserAuthservice *twitchUserAuthservice.TwitchUserAuthorizationService
@@ -59,6 +62,7 @@ type TelegramUpdatesCheckService struct {
 
 func NewTelegramUpdatesCheckService(
 	twitchClient *twitch_client.TwitchClient,
+	fClient *fileClient.FileClient,
 	dbRepo *dbRepository.DBRepository,
 	notifiService *notificationService.TwitchNotificationService,
 	twitchUserAuthservice *twitchUserAuthservice.TwitchUserAuthorizationService,
@@ -67,6 +71,7 @@ func NewTelegramUpdatesCheckService(
 ) (*TelegramUpdatesCheckService, error) {
 	return &TelegramUpdatesCheckService{
 		twitchClient:          twitchClient,
+		fClient:               fClient,
 		dbRepo:                dbRepo,
 		notificationService:   notifiService,
 		twitchUserAuthservice: twitchUserAuthservice,
@@ -81,9 +86,6 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	// для подробных логов
-	bot.Debug = true
 
 	logrus.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -107,7 +109,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				msg.Text = "I'm sorry I took a little nap ☺️ . Now I'm awake and ready to go! 😎 "
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
-				bot.Send(msg)
+				sendMsgToTelegram(ctx, msg, bot)
 
 				logrus.Printf("skip reason: old time. User %s, message time %s, time now %s", updateInfo.Message.From.UserName, timeAndZone, timeNow)
 				continue
@@ -130,6 +132,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				if err != nil {
 					logrus.Errorf("GetBotCommands error: %v", err)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
@@ -151,9 +154,13 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
+				sendMsgToTelegram(ctx, msg, bot)
+
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(pingCommand)):
 				msg.Text = "pong"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
+
+				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(commands)):
 				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
@@ -161,6 +168,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					logrus.Errorf("GetBotCommands error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
@@ -181,6 +189,8 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
+				sendMsgToTelegram(ctx, msg, bot)
+
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(jokeCommand)):
 
 				msg.Text = fmt.Sprintf(`
@@ -188,6 +198,8 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				
 				%s`,
 					models.JokeList[rand.Intn(len(models.JokeList))])
+
+				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchBanTest)):
 				var emote string
@@ -212,11 +224,21 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
+				sendMsgToTelegram(ctx, msg, bot)
+
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
 
-				msg = tmcs.TwitchUserCase(ctx, msg, updateInfo)
+				var photo tgbotapi.PhotoConfig
 
-			// TODO: кастомизировать exampleText
+				photo.ChatID = updateInfo.Message.Chat.ID
+
+				photo = tmcs.TwitchUserCase(ctx, photo, updateInfo, updateInfo.Message.Chat.ID)
+				_, err = bot.Send(photo)
+				if err != nil {
+					logrus.Errorf("telegram send message error: %v", err)
+				}
+
+				sendPhotoToTelegram(ctx, photo, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
 
@@ -228,21 +250,25 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				if userLogin == "" || !isValid {
 					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchStreamNotifi, twitchStreamNotifi)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
-				userLogin = text_formater.ToLower(userLogin)
+				userLogin = formater.ToLower(userLogin)
 
 				err := tmcs.dbRepo.AddTwitchNotification(ctx, uint64(chatId), userLogin, models.NotificationByUser)
 				if err != nil {
 					logrus.Errorf("Add twitch notification request error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
 				msg.Text = "Request successfully accepted! This channel will now receive stream notifications from Twitch channel that you specified"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
+
+				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropStreamNotifi)):
 
@@ -252,10 +278,11 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				if userLogin == "" || !isValid {
 					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchDropStreamNotifi, twitchDropStreamNotifi)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
-				userLogin = text_formater.ToLower(userLogin)
+				userLogin = formater.ToLower(userLogin)
 
 				err := tmcs.dbRepo.SetInactiveNotificationByType(ctx, uint64(chatId), userLogin, models.NotificationByUser)
 				if err != nil {
@@ -263,16 +290,20 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 						logrus.Errorf("notification by chatId %d user %s not found", chatId, userLogin)
 						msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such request was not created"
 						msg.ReplyToMessageID = updateInfo.Message.MessageID
+						sendMsgToTelegram(ctx, msg, bot)
 						break
 					}
 					logrus.Errorf("Set inactive twitch notification error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
 				msg.Text = "Notifications were disabled successfully"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
+
+				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotify)):
 
@@ -281,6 +312,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					logrus.Errorf("CheckUserTokensByChat error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
@@ -289,8 +321,8 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					resp := "To use this functionality, follow the link and provide access to the necessary information"
 					msg.Text = resp
 
-					msg = createTwitchOath2LinkResp(msg, data.Link, "Open Link", updateInfo.Message.MessageID)
-
+					msg = formater.CreateTelegramSingleButtonLink(msg, data.Link, "Open Link", updateInfo.Message.MessageID)
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
@@ -299,11 +331,14 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					logrus.Errorf("Add twitch notification request error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
 				msg.Text = "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
+
+				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropFollowedStreamNotify)):
 
@@ -313,27 +348,41 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 						logrus.Errorf("followed streams notification by chatId %d not found", chatId)
 						msg.Text = "No requests for notifications were found 😕"
 						msg.ReplyToMessageID = updateInfo.Message.MessageID
+						sendMsgToTelegram(ctx, msg, bot)
 						break
 					}
 					logrus.Errorf("Set inactive twitch notification error: %v", err)
 					msg.Text = somethingWrong
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
+					sendMsgToTelegram(ctx, msg, bot)
 					break
 				}
 
 				msg.Text = "Notifications were disabled successfully"
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
+				sendMsgToTelegram(ctx, msg, bot)
 			}
 
-			_, err = bot.Send(msg)
-			if err != nil {
-				logrus.Errorf("telegram send message error: %v", err)
-			}
 		}
+
 	}
 
 	return nil
+}
+
+func sendMsgToTelegram(ctx context.Context, resp tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
+	_, err := bot.Send(resp)
+	if err != nil {
+		logrus.Errorf("telegram send message error: %v", err)
+	}
+}
+
+func sendPhotoToTelegram(ctx context.Context, resp tgbotapi.PhotoConfig, bot *tgbotapi.BotAPI) {
+	_, err := bot.Send(resp)
+	if err != nil {
+		logrus.Errorf("telegram send message error: %v", err)
+	}
 }
 
 func (tmcs *TelegramUpdatesCheckService) SyncBg(ctx context.Context, syncInterval time.Duration) {
@@ -367,24 +416,4 @@ func validateText(text string) (str string, isValid bool) {
 	}
 
 	return words[0], true
-}
-
-func createTwitchOath2LinkResp(msg tgbotapi.MessageConfig, link, text string, messageID int) tgbotapi.MessageConfig {
-
-	board := make([][]tgbotapi.InlineKeyboardButton, 1)
-	for i := range board {
-		board[i] = make([]tgbotapi.InlineKeyboardButton, 1)
-	}
-
-	board[0][0].Text = text
-	board[0][0].URL = &link
-
-	msg.ReplyMarkup = tgbotapi.InlineKeyboardMarkup{
-		InlineKeyboard: board,
-	}
-
-	msg.ReplyToMessageID = messageID
-
-	return msg
-
 }

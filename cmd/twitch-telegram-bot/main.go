@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	fileClient "twitch_telegram_bot/internal/client/file"
 	telegramClient "twitch_telegram_bot/internal/client/telegram-client"
 	twitchClient "twitch_telegram_bot/internal/client/twitch-client"
 	twitchOauthClient "twitch_telegram_bot/internal/client/twitch-oauth-client"
@@ -52,6 +53,7 @@ func main() {
 	var (
 		telegaClient      = telegramClient.NewTelegramClient()
 		twitchOauthClient = twitchOauthClient.NewTwitchOauthClient()
+		fClient           = fileClient.NewFileClient()
 	)
 
 	dbRepo := dbRepository.NewDBRepository(db)
@@ -78,7 +80,7 @@ func main() {
 		logrus.Fatalf("cannot init twitchUserAuthservice: %v", err)
 	}
 
-	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, dbRepo, tns, tuas, telegaService, twitchOauthClient)
+	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, fClient, dbRepo, tns, tuas, telegaService, twitchOauthClient)
 	if err != nil {
 		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
 	}

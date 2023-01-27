@@ -1,4 +1,4 @@
-package text_formater
+package formater
 
 import "strings"
 
