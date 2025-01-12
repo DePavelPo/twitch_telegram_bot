@@ -229,15 +229,12 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
 
 				var photo tgbotapi.PhotoConfig
-
 				photo.ChatID = updateInfo.Message.Chat.ID
 
+				// get user info from twitch and prepare data
 				photo = tmcs.TwitchUserCase(ctx, photo, updateInfo, updateInfo.Message.Chat.ID)
-				_, err = bot.Send(photo)
-				if err != nil {
-					logrus.Errorf("telegram send message error: %v", err)
-				}
 
+				// send user info to telegram bot
 				sendPhotoToTelegram(ctx, photo, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
@@ -371,17 +368,17 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 	return nil
 }
 
-func sendMsgToTelegram(ctx context.Context, resp tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
+func sendMsgToTelegram(_ context.Context, resp tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
 	_, err := bot.Send(resp)
 	if err != nil {
-		logrus.Errorf("telegram send message error: %v", err)
+		logrus.Errorf("telegram send message error: %s", err.Error())
 	}
 }
 
-func sendPhotoToTelegram(ctx context.Context, resp tgbotapi.PhotoConfig, bot *tgbotapi.BotAPI) {
+func sendPhotoToTelegram(_ context.Context, resp tgbotapi.PhotoConfig, bot *tgbotapi.BotAPI) {
 	_, err := bot.Send(resp)
 	if err != nil {
-		logrus.Errorf("telegram send message error: %v", err)
+		logrus.Errorf("telegram send message error: %s", err.Error())
 	}
 }
 

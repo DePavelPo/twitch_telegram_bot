@@ -42,12 +42,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 		return photo
 	}
 
-	if users == nil {
-		photo.Caption = "User not found"
-		photo.ReplyToMessageID = updateInfo.Message.MessageID
-		return photo
-	}
-	if len(users.Data) < 1 {
+	if (users == nil) || (len(users.Data) < 1) {
 		photo.Caption = "User not found"
 		photo.ReplyToMessageID = updateInfo.Message.MessageID
 		return photo
@@ -56,7 +51,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 	user := users.Data[0]
 	accCreatedTime := user.CreatedAt
 
-	// отображаем по МСК
+	// using MSK timezone
 	location := time.FixedZone("MSK", 3*60*60)
 	accCreatedTime = accCreatedTime.In(location)
 
