@@ -18,18 +18,19 @@ var userCustomExampleText string = `Request example:
 
 func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 	ctx context.Context,
-	photo tgbotapi.PhotoConfig,
 	updateInfo tgbotapi.Update,
 	chatID int64,
-) tgbotapi.PhotoConfig {
+) (photo tgbotapi.PhotoConfig, isFound bool) {
+
+	photo.ChatID = updateInfo.Message.Chat.ID
+	photo.ReplyToMessageID = updateInfo.Message.MessageID
 
 	commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchUserCommand)):]
 
 	userLogin, isValid := validateText(commandText)
 	if userLogin == "" || !isValid {
 		photo.Caption = invalidReq + fmt.Sprintf(userCustomExampleText, twitchUserCommand, twitchUserCommand)
-		photo.ReplyToMessageID = updateInfo.Message.MessageID
-		return photo
+		return
 	}
 
 	userLogin = formater.ToLower(userLogin)
@@ -38,15 +39,17 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 	if err != nil {
 		logrus.Error(err)
 		photo.Caption = somethingWrong
-		photo.ReplyToMessageID = updateInfo.Message.MessageID
-		return photo
+		return
 	}
 
 	if (users == nil) || (len(users.Data) < 1) {
 		photo.Caption = "User not found"
-		photo.ReplyToMessageID = updateInfo.Message.MessageID
-		return photo
+		return
 	}
+
+	// we sure we've got user info
+	// and we can work with it
+	isFound = true
 
 	user := users.Data[0]
 	accCreatedTime := user.CreatedAt
@@ -89,8 +92,6 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 		userType,
 		userBroadcasterType)
 
-	photo.ReplyToMessageID = updateInfo.Message.MessageID
-
 	var streamStatus = "undefined"
 	streams, err := tmcs.twitchClient.GetActiveStreamInfoByUsers(ctx, []string{userLogin})
 	if err == nil || streams != nil {
@@ -119,5 +120,5 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 
 	newPhoto = formater.CreateTelegramSingleButtonLinkForPhoto(newPhoto, fmt.Sprintf("https://www.twitch.tv/%s", user.Login), "Open the channel", updateInfo.Message.MessageID)
 
-	return newPhoto
+	return newPhoto, isFound
 }

@@ -77,7 +77,8 @@ func (dbr *DBRepository) GetTokensByChatID(ctx context.Context,
 				tut.current_state
 			from twitch_user_tokens tut 
 			where $1 = ANY(tut."scope") 
-				and tut.chat_id = $2;
+				and tut.chat_id = $2
+			limit 1;
 			`
 
 	err = dbr.db.GetContext(ctx, &data, query, scope, chatID)

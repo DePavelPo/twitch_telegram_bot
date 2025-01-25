@@ -228,14 +228,20 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
 
-				var photo tgbotapi.PhotoConfig
-				photo.ChatID = updateInfo.Message.Chat.ID
-
 				// get user info from twitch and prepare data
-				photo = tmcs.TwitchUserCase(ctx, photo, updateInfo, updateInfo.Message.Chat.ID)
+				if photo, isFound := tmcs.TwitchUserCase(ctx, updateInfo, updateInfo.Message.Chat.ID); !isFound {
+					msg.ChatID = photo.ChatID
+					msg.ReplyToMessageID = photo.ReplyToMessageID
+					msg.Text = photo.Caption
 
-				// send user info to telegram bot
-				sendPhotoToTelegram(ctx, photo, bot)
+					// send info without a picture to telegram bot
+					sendMsgToTelegram(ctx, msg, bot)
+
+				} else {
+
+					// send user info with a picture to telegram bot
+					sendPhotoToTelegram(ctx, photo, bot)
+				}
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
 
