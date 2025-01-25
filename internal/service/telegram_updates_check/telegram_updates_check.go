@@ -243,8 +243,6 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
 
-				chatId := updateInfo.Message.Chat.ID
-
 				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchStreamNotifi)):]
 
 				userLogin, isValid := validateText(commandText)
