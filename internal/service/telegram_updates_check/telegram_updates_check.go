@@ -38,9 +38,7 @@ const (
 	startCommand                   teleCommands = "/start"
 	pingCommand                    teleCommands = "/ping"
 	commands                       teleCommands = "/commands"
-	jokeCommand                    teleCommands = "/anec"
 	twitchUserCommand              teleCommands = "/twitch_user"
-	twitchBanTest                  teleCommands = "/twitch_ban_test"
 	twitchStreamNotifi             teleCommands = "/twitch_stream_notify"
 	twitchDropStreamNotifi         teleCommands = "/twitch_drop_stream_notify"
 	twitchFollowedStreamNotify     teleCommands = "/twitch_followed_notify"
@@ -184,41 +182,6 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					}
 
 				}
-
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(jokeCommand)):
-
-				msg.Text = fmt.Sprintf(`
-				Attention! joke!
-				
-				%s`,
-					models.JokeList[rand.Intn(len(models.JokeList))])
-
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchBanTest)):
-				var emote string
-
-				chance := rand.Intn(101)
-				switch {
-				case chance == 0:
-					emote = "😩"
-				case chance > 0 && chance <= 25:
-					emote = "🤔"
-				case chance > 25 && chance <= 50:
-					emote = "😮"
-				case chance > 50 && chance <= 75:
-					emote = "😃"
-				case chance > 75 && chance <= 99:
-					emote = "🤯"
-				default:
-					emote = "😎"
-				}
-
-				msg.Text = fmt.Sprintf("Your chance to get banned on Twitch = %d%% %s", chance, emote)
 
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
