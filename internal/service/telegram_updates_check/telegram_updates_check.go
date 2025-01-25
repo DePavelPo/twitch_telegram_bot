@@ -250,7 +250,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchStreamNotifi)):]
 
 				userLogin, isValid := validateText(commandText)
-				if userLogin == "" || !isValid {
+				if !isValid {
 					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchStreamNotifi, twitchStreamNotifi)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					sendMsgToTelegram(ctx, msg, bot)
@@ -278,7 +278,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchDropStreamNotifi)):]
 
 				userLogin, isValid := validateText(commandText)
-				if userLogin == "" || !isValid {
+				if !isValid {
 					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchDropStreamNotifi, twitchDropStreamNotifi)
 					msg.ReplyToMessageID = updateInfo.Message.MessageID
 					sendMsgToTelegram(ctx, msg, bot)
@@ -410,11 +410,11 @@ func (tmcs *TelegramUpdatesCheckService) SyncBg(ctx context.Context, syncInterva
 
 }
 
-func validateText(text string) (str string, isValid bool) {
+func validateText(text string) (string, bool) {
 
 	words := strings.Fields(text)
 
-	if len(words) != 1 {
+	if len(words) != 1 || words[0] == "" {
 		return "", false
 	}
 

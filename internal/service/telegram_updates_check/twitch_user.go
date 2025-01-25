@@ -28,7 +28,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 	commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchUserCommand)):]
 
 	userLogin, isValid := validateText(commandText)
-	if userLogin == "" || !isValid {
+	if !isValid {
 		photo.Caption = invalidReq + fmt.Sprintf(userCustomExampleText, twitchUserCommand, twitchUserCommand)
 		return
 	}
