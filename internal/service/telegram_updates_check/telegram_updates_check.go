@@ -125,7 +125,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(startCommand)):
 
-				msg.Text = `Greetings! The bot provides functionality for interacting with Twitch streaming platform
+				msg.Text = `Greetings! The bot provides the functionality for interacting with Twitch streaming platform
 				`
 
 				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
@@ -144,8 +144,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				if teleCommands != nil {
 					for _, teleCommand := range teleCommands.Commands {
 						msg.Text = fmt.Sprintf(
-							`
-							%s
+							`%s
 							%s - %s`, msg.Text, teleCommand.Command, teleCommand.Description,
 						)
 					}
@@ -179,8 +178,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				if teleCommands != nil {
 					for _, teleCommand := range teleCommands.Commands {
 						msg.Text = fmt.Sprintf(
-							`
-							%s
+							`%s
 							%s - %s`, msg.Text, teleCommand.Command, teleCommand.Description,
 						)
 					}
@@ -257,9 +255,9 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					break
 				}
 
-				userLogin = formater.ToLower(userLogin)
+				userLoginLowercase := formater.ToLower(userLogin)
 
-				err := tmcs.dbRepo.AddTwitchNotification(ctx, uint64(chatId), userLogin, models.NotificationByUser)
+				err := tmcs.dbRepo.AddTwitchNotification(ctx, uint64(chatId), userLoginLowercase, models.NotificationByUser)
 				if err != nil {
 					logrus.Errorf("Add twitch notification request error: %v", err)
 					msg.Text = somethingWrong
@@ -268,7 +266,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 					break
 				}
 
-				msg.Text = "Request successfully accepted! This channel will now receive stream notifications from Twitch channel that you specified"
+				msg.Text = fmt.Sprintf("Request successfully accepted! This channel will now receive stream notifications from %s Twitch channel", userLogin)
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
 				sendMsgToTelegram(ctx, msg, bot)
@@ -321,7 +319,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 				if data.Link != "" {
 
-					resp := "To use this functionality, follow the link and provide access to the necessary information"
+					resp := "To use this feature, follow the link and provide access to the necessary information"
 					msg.Text = resp
 
 					msg = formater.CreateTelegramSingleButtonLink(msg, data.Link, "Open Link", updateInfo.Message.MessageID)
