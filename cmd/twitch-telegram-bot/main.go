@@ -32,12 +32,31 @@ import (
 	_ "github.com/lib/pq"
 )
 
+const (
+	localENV = "local"
+	prodENV  = "prod"
+)
+
 func main() {
 	ctx := context.Background()
 
 	err := godotenv.Load()
 	if err != nil {
 		logrus.Fatal("Error loading .env file")
+	}
+
+	var protocol, directAddr, redirectAddr string
+	switch os.Getenv("CURRENT_ENV") {
+	case localENV:
+		protocol = "http"
+		directAddr = os.Getenv("LOCAL_DIRECT_ADDR")
+		redirectAddr = os.Getenv("LOCAL_REDIRECT_ADDR")
+	case prodENV:
+		protocol = "https"
+		directAddr = os.Getenv("DIRECT_ADDR")
+		redirectAddr = os.Getenv("REDIRECT_ADDR")
+	default:
+		logrus.Fatalf("unknown env: %s", os.Getenv("CURRENT_ENV"))
 	}
 
 	db, err := sqlx.Connect("postgres", os.Getenv("DB_CONN"))
@@ -52,7 +71,7 @@ func main() {
 
 	var (
 		telegaClient      = telegramClient.NewTelegramClient()
-		twitchOauthClient = twitchOauthClient.NewTwitchOauthClient()
+		twitchOauthClient = twitchOauthClient.NewTwitchOauthClient(protocol, redirectAddr)
 		fClient           = fileClient.NewFileClient()
 	)
 
@@ -75,7 +94,7 @@ func main() {
 	}
 	go tns.SyncBg(ctx, time.Minute*5)
 
-	tuas, err := twitchUserAuthservice.NewTwitchUserAuthorizationService(dbRepo, twitchOauthClient)
+	tuas, err := twitchUserAuthservice.NewTwitchUserAuthorizationService(dbRepo, twitchOauthClient, protocol, redirectAddr)
 	if err != nil {
 		logrus.Fatalf("cannot init twitchUserAuthservice: %v", err)
 	}
@@ -109,7 +128,7 @@ func main() {
 	go func() {
 		srv := &http.Server{
 			Handler:      router1,
-			Addr:         os.Getenv("DIRECT_ADDR"),
+			Addr:         directAddr,
 			WriteTimeout: 5 * time.Second,
 			ReadTimeout:  5 * time.Second,
 		}
@@ -122,7 +141,7 @@ func main() {
 	go func() {
 		srv := &http.Server{
 			Handler:      router2,
-			Addr:         os.Getenv("REDIRECT_ADDR"),
+			Addr:         redirectAddr,
 			WriteTimeout: 5 * time.Second,
 			ReadTimeout:  5 * time.Second,
 		}

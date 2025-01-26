@@ -102,9 +102,11 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByChat(ctx context.Co
 func (tuas *TwitchUserAuthorizationService) TwitchCreateOAuth2Link(ctx context.Context, state string) string {
 
 	url := fmt.Sprintf(
-		"%s/oauth2/authorize?client_id=%s&response_type=code&redirect_uri=http://localhost:3000&scope=user:read:follows+channel:read:subscriptions&state=%s",
+		"%s/oauth2/authorize?client_id=%s&response_type=code&redirect_uri=%s://%s&scope=user:read:follows+channel:read:subscriptions&state=%s",
 		twitchIDSchemeHost,
 		os.Getenv("TWITCH_CLIENT_ID"),
+		tuas.protocol,
+		tuas.redirectAddr,
 		state,
 	)
 

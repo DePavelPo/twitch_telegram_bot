@@ -16,10 +16,17 @@ import (
 const twitchIDSchemeHost string = "https://id.twitch.tv"
 
 type TwitchOauthClient struct {
+	protocol     string
+	redirectAddr string
 }
 
-func NewTwitchOauthClient() *TwitchOauthClient {
-	return &TwitchOauthClient{}
+func NewTwitchOauthClient(
+	protocol, redirectAddr string,
+) *TwitchOauthClient {
+	return &TwitchOauthClient{
+		protocol:     protocol,
+		redirectAddr: redirectAddr,
+	}
 }
 
 func (twc *TwitchOauthClient) TwitchOAuthGetToken(ctx context.Context) (data *models.TwitchOautGetTokenResponse, err error) {

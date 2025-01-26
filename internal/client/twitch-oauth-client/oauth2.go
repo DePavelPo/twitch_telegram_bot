@@ -2,6 +2,7 @@ package twitch_oath_client
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -28,7 +29,7 @@ func (twc *TwitchOauthClient) TwitchGetUserToken(ctx context.Context, token stri
 	query.Add("client_secret", os.Getenv("TWITCH_SECRET"))
 	query.Add("grant_type", "authorization_code")
 	query.Add("code", token)
-	query.Add("redirect_uri", "http://localhost:3000")
+	query.Add("redirect_uri", fmt.Sprintf("%s://%s", twc.protocol, twc.redirectAddr))
 	req.URL.RawQuery = query.Encode()
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
