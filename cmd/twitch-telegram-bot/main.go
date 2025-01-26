@@ -109,7 +109,7 @@ func main() {
 	go func() {
 		srv := &http.Server{
 			Handler:      router1,
-			Addr:         "localhost:8083",
+			Addr:         os.Getenv("DIRECT_ADDR"),
 			WriteTimeout: 5 * time.Second,
 			ReadTimeout:  5 * time.Second,
 		}
@@ -122,7 +122,7 @@ func main() {
 	go func() {
 		srv := &http.Server{
 			Handler:      router2,
-			Addr:         "localhost:3000",
+			Addr:         os.Getenv("REDIRECT_ADDR"),
 			WriteTimeout: 5 * time.Second,
 			ReadTimeout:  5 * time.Second,
 		}
