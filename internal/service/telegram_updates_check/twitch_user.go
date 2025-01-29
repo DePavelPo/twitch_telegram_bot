@@ -19,7 +19,6 @@ var userCustomExampleText string = `Request example:
 func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
-	chatID int64,
 ) (photo tgbotapi.PhotoConfig, isFound bool) {
 
 	photo.ChatID = updateInfo.Message.Chat.ID
@@ -114,7 +113,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 		streamStatus,
 	)
 
-	newPhoto := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(user.ProfileImageUrl))
+	newPhoto := tgbotapi.NewPhoto(updateInfo.Message.Chat.ID, tgbotapi.FileURL(user.ProfileImageUrl))
 	newPhoto.ReplyToMessageID = updateInfo.Message.MessageID
 	newPhoto.Caption = photo.Caption
 

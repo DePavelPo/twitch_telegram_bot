@@ -190,7 +190,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
 
 				// get user info from twitch and prepare data
-				if photo, isFound := tmcs.TwitchUserCase(ctx, updateInfo, updateInfo.Message.Chat.ID); !isFound {
+				if photo, isFound := tmcs.TwitchUserCase(ctx, updateInfo); !isFound {
 					msg.ChatID = photo.ChatID
 					msg.ReplyToMessageID = photo.ReplyToMessageID
 					msg.Text = photo.Caption
@@ -206,30 +206,13 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
 
-				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchStreamNotifi)):]
-
-				userLogin, isValid := validateText(commandText)
-				if !isValid {
-					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchStreamNotifi, twitchStreamNotifi)
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
-				}
-
-				userLoginLowercase := formater.ToLower(userLogin)
-
-				err := tmcs.dbRepo.AddTwitchNotification(ctx, uint64(chatId), userLoginLowercase, models.NotificationByUser)
+				// go to make a task that notice about channel live streams
+				msg, err := tmcs.TwitchAddStreamNotification(ctx, updateInfo)
 				if err != nil {
-					logrus.Errorf("Add twitch notification request error: %v", err)
-					msg.Text = somethingWrong
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
+					logrus.Errorf("twitch stream notification error: %s", err.Error())
 				}
 
-				msg.Text = fmt.Sprintf("Request successfully accepted! This channel will now receive stream notifications from %s Twitch channel", userLogin)
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
+				// send successful message to telegram bot
 				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropStreamNotifi)):
