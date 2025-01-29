@@ -83,7 +83,7 @@ func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
 	photo.Caption = fmt.Sprintf(`
 	User information:
 	User: %s
-	Account creation date: %s
+	Account created: %s (GMT+3)
 	User type: %s
 	Streamer type: %s
 	`,
