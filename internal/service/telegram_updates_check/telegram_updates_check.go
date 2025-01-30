@@ -3,7 +3,6 @@ package telegram_updates_check
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -114,7 +113,6 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			}
 
 			// TODO: добавить валидацию
-			rand.Seed(time.Now().UnixNano())
 			// TODO: расширять функционал
 			// TODO: раскидать все кейсы по отдельным функциям
 
