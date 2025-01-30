@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (tmcs *TelegramUpdatesCheckService) TwitchAddStreamNotification(
+func (tmcs *TelegramUpdatesCheckService) twitchAddStreamNotification(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
 ) (msg tgbotapi.MessageConfig, err error) {
@@ -37,6 +37,44 @@ func (tmcs *TelegramUpdatesCheckService) TwitchAddStreamNotification(
 	}
 
 	msg.Text = fmt.Sprintf("Request successfully accepted! This channel will now receive stream notifications from %s Twitch channel", userLogin)
+
+	return
+}
+
+func (tmcs *TelegramUpdatesCheckService) twitchCancelStreamNotification(
+	ctx context.Context,
+	updateInfo tgbotapi.Update,
+) (msg tgbotapi.MessageConfig, err error) {
+
+	msg.ChatID = updateInfo.Message.Chat.ID
+	msg.ReplyToMessageID = updateInfo.Message.MessageID
+
+	commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchCancelStreamNotifi)):]
+
+	userLogin, isValid := validateText(commandText)
+	if !isValid {
+		msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchCancelStreamNotifi, twitchCancelStreamNotifi)
+
+		return
+	}
+
+	userLogin = formater.ToLower(userLogin)
+
+	err = tmcs.dbRepo.SetInactiveNotificationByType(ctx, uint64(updateInfo.Message.Chat.ID), userLogin, models.NotificationByUser)
+	if err != nil {
+
+		if err.Error() == "notification not found" {
+			msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such request was not created"
+
+			return msg, errors.Errorf("notification by chatId %d user %s not found", updateInfo.Message.Chat.ID, userLogin)
+		}
+
+		msg.Text = somethingWrong
+
+		return msg, errors.Wrap(err, "SetInactiveNotificationByType")
+	}
+
+	msg.Text = "Notifications were disabled successfully"
 
 	return
 }

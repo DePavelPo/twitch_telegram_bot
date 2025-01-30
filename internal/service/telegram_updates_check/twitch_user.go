@@ -16,7 +16,7 @@ var userCustomExampleText string = `Request example:
 	%s WELOVEGAMES
 	`
 
-func (tmcs *TelegramUpdatesCheckService) TwitchUserCase(
+func (tmcs *TelegramUpdatesCheckService) twitchUserCase(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
 ) (photo tgbotapi.PhotoConfig, isFound bool) {

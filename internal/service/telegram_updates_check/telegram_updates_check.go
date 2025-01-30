@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"twitch_telegram_bot/internal/models"
 
 	notificationService "twitch_telegram_bot/internal/service/notification"
 	twitchUserAuthservice "twitch_telegram_bot/internal/service/twitch-user-authorization"
@@ -18,8 +17,6 @@ import (
 	telegram_service "twitch_telegram_bot/internal/service/telegram"
 
 	dbRepository "twitch_telegram_bot/db/repository"
-
-	formater "twitch_telegram_bot/internal/utils/formater"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
@@ -33,15 +30,15 @@ const (
 type teleCommands string
 
 const (
-	telegramUpdatesCheckBGSync                  = "telegramUpdatesCheck_BGSync"
-	startCommand                   teleCommands = "/start"
-	pingCommand                    teleCommands = "/ping"
-	commands                       teleCommands = "/commands"
-	twitchUserCommand              teleCommands = "/twitch_user"
-	twitchStreamNotifi             teleCommands = "/twitch_stream_notify"
-	twitchDropStreamNotifi         teleCommands = "/twitch_drop_stream_notify"
-	twitchFollowedStreamNotify     teleCommands = "/twitch_followed_notify"
-	twitchDropFollowedStreamNotify teleCommands = "/twitch_drop_followed_notify"
+	telegramUpdatesCheckBGSync                    = "telegramUpdatesCheck_BGSync"
+	startCommand                     teleCommands = "/start"
+	pingCommand                      teleCommands = "/ping"
+	commands                         teleCommands = "/commands"
+	twitchUserCommand                teleCommands = "/user_info"
+	twitchStreamNotifi               teleCommands = "/stream_notify"
+	twitchCancelStreamNotifi         teleCommands = "/cancel_stream_notify"
+	twitchFollowedStreamNotify       teleCommands = "/followed_notify"
+	twitchCancelFollowedStreamNotify teleCommands = "/cancel_followed_notify"
 )
 
 type TelegramUpdatesCheckService struct {
@@ -103,7 +100,7 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			// TODO: подумать, как избежать дубликации ответа
 			if timeAndZone.Add(time.Second * 15).Before(timeNow) {
 
-				msg.Text = "I'm sorry I took a little nap ☺️ . Now I'm awake and ready to go! 😎 "
+				msg.Text = "Sorry, I took a little nap ☺️ . Now I'm awake and ready to go! 😎 "
 				msg.ReplyToMessageID = updateInfo.Message.MessageID
 
 				sendMsgToTelegram(ctx, msg, bot)
@@ -114,41 +111,16 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 
 			// TODO: добавить валидацию
 			// TODO: расширять функционал
-			// TODO: раскидать все кейсы по отдельным функциям
-
-			chatId := updateInfo.Message.Chat.ID
 
 			switch {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(startCommand)):
 
-				msg.Text = `Greetings! The bot provides the functionality for interacting with Twitch streaming platform
-				`
-
-				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
+				msg, err := tmcs.start(ctx, updateInfo)
 				if err != nil {
-					logrus.Errorf("GetBotCommands error: %v", err)
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
+					logrus.Errorf("start error: %s", err.Error())
 				}
 
-				msg.Text = fmt.Sprintf(
-					`%s
-					%s
-					`, msg.Text, "Bot's command list:")
-
-				if teleCommands != nil {
-					for _, teleCommand := range teleCommands.Commands {
-						msg.Text = fmt.Sprintf(
-							`%s
-							%s - %s`, msg.Text, teleCommand.Command, teleCommand.Description,
-						)
-					}
-
-				}
-
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
+				// send result message to telegram bot
 				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(pingCommand)):
@@ -158,37 +130,19 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(commands)):
-				teleCommands, err := tmcs.telegramService.GetBotCommands(ctx)
+
+				msg, err := tmcs.commands(ctx, updateInfo)
 				if err != nil {
-					logrus.Errorf("GetBotCommands error: %v", err)
-					msg.Text = somethingWrong
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
+					logrus.Errorf("commands error: %s", err.Error())
 				}
 
-				msg.Text = `Bot's command list:
-				
-				`
-
-				if teleCommands != nil {
-					for _, teleCommand := range teleCommands.Commands {
-						msg.Text = fmt.Sprintf(
-							`%s
-							%s - %s`, msg.Text, teleCommand.Command, teleCommand.Description,
-						)
-					}
-
-				}
-
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
+				// send result message to telegram bot
 				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
 
 				// get user info from twitch and prepare data
-				if photo, isFound := tmcs.TwitchUserCase(ctx, updateInfo); !isFound {
+				if photo, isFound := tmcs.twitchUserCase(ctx, updateInfo); !isFound {
 					msg.ChatID = photo.ChatID
 					msg.ReplyToMessageID = photo.ReplyToMessageID
 					msg.Text = photo.Caption
@@ -205,106 +159,49 @@ func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
 
 				// go to make a task that notice about channel live streams
-				msg, err := tmcs.TwitchAddStreamNotification(ctx, updateInfo)
+				msg, err := tmcs.twitchAddStreamNotification(ctx, updateInfo)
 				if err != nil {
 					logrus.Errorf("twitch stream notification error: %s", err.Error())
 				}
 
-				// send successful message to telegram bot
+				// send result message to telegram bot
 				sendMsgToTelegram(ctx, msg, bot)
 
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropStreamNotifi)):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchCancelStreamNotifi)):
 
-				commandText := updateInfo.Message.Text[len(fmt.Sprint(twitchDropStreamNotifi)):]
-
-				userLogin, isValid := validateText(commandText)
-				if !isValid {
-					msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchDropStreamNotifi, twitchDropStreamNotifi)
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
-				}
-
-				userLogin = formater.ToLower(userLogin)
-
-				err := tmcs.dbRepo.SetInactiveNotificationByType(ctx, uint64(chatId), userLogin, models.NotificationByUser)
+				// go to cancel a task that notice about channel live streams
+				msg, err := tmcs.twitchCancelStreamNotification(ctx, updateInfo)
 				if err != nil {
-					if err.Error() == "notification not found" {
-						logrus.Errorf("notification by chatId %d user %s not found", chatId, userLogin)
-						msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such request was not created"
-						msg.ReplyToMessageID = updateInfo.Message.MessageID
-						sendMsgToTelegram(ctx, msg, bot)
-						break
-					}
-					logrus.Errorf("Set inactive twitch notification error: %v", err)
-					msg.Text = somethingWrong
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
+					logrus.Errorf("twitch cancel stream notification error: %s", err.Error())
 				}
 
-				msg.Text = "Notifications were disabled successfully"
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
+				// send result message to telegram bot
 				sendMsgToTelegram(ctx, msg, bot)
 
 			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotify)):
 
-				data, err := tmcs.twitchUserAuthservice.CheckUserTokensByChat(ctx, uint64(chatId))
+				// go to make a task that notice about channels' live streams from user following list on Twitch
+				msg, err := tmcs.twitchAddFollowedNotification(ctx, updateInfo)
 				if err != nil {
-					logrus.Errorf("CheckUserTokensByChat error: %v", err)
-					msg.Text = somethingWrong
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
+					logrus.Errorf("twitch followed stream notification error: %s", err.Error())
 				}
 
-				if data.Link != "" {
-
-					resp := "To use this feature, follow the link and provide access to the necessary information"
-					msg.Text = resp
-
-					msg = formater.CreateTelegramSingleButtonLink(msg, data.Link, "Open Link", updateInfo.Message.MessageID)
-					sendMsgToTelegram(ctx, msg, bot)
-					break
-				}
-
-				err = tmcs.dbRepo.AddTwitchNotification(ctx, uint64(chatId), data.UserID, models.NotificationFollowed)
-				if err != nil {
-					logrus.Errorf("Add twitch notification request error: %v", err)
-					msg.Text = somethingWrong
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
-				}
-
-				msg.Text = "Request successfully accepted! This channel will now receive stream notifications from channels that you following"
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
+				// send result message to telegram bot
 				sendMsgToTelegram(ctx, msg, bot)
 
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchDropFollowedStreamNotify)):
+			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchCancelFollowedStreamNotify)):
 
-				err := tmcs.dbRepo.SetInactiveNotificationByType(ctx, uint64(chatId), "", models.NotificationFollowed)
+				// go to cancel a task that notice about channels' live streams from user following list on Twitch
+				msg, err := tmcs.twitchCancelFollowedNotification(ctx, updateInfo)
 				if err != nil {
-					if err.Error() == "notification not found" {
-						logrus.Errorf("followed streams notification by chatId %d not found", chatId)
-						msg.Text = "No requests for notifications were found 😕"
-						msg.ReplyToMessageID = updateInfo.Message.MessageID
-						sendMsgToTelegram(ctx, msg, bot)
-						break
-					}
-					logrus.Errorf("Set inactive twitch notification error: %v", err)
-					msg.Text = somethingWrong
-					msg.ReplyToMessageID = updateInfo.Message.MessageID
-					sendMsgToTelegram(ctx, msg, bot)
-					break
+					logrus.Errorf("twitch cancel followed stream notification error: %s", err.Error())
 				}
 
-				msg.Text = "Notifications were disabled successfully"
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
+				// send result message to telegram bot
 				sendMsgToTelegram(ctx, msg, bot)
+
+			default:
+
 			}
 
 		}
