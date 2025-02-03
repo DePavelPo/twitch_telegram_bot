@@ -3,7 +3,7 @@ package twitch_oath_client
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -13,7 +13,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (twc *TwitchOauthClient) TwitchGetUserToken(ctx context.Context, token string) (data *models.TwitchOautGetUserTokenResponse, err error) {
+func (twc *TwitchOauthClient) TwitchOAuthGetToken(
+	ctx context.Context,
+	twitchCode string,
+) (*models.TwitchOautGetTokenResponse, error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -27,37 +30,68 @@ func (twc *TwitchOauthClient) TwitchGetUserToken(ctx context.Context, token stri
 	query := req.URL.Query()
 	query.Add("client_id", os.Getenv("TWITCH_CLIENT_ID"))
 	query.Add("client_secret", os.Getenv("TWITCH_SECRET"))
-	query.Add("grant_type", "authorization_code")
-	query.Add("code", token)
-	query.Add("redirect_uri", fmt.Sprintf("%s://%s", twc.protocol, twc.redirectAddr))
+
+	// client token flow as a default
+	grantType := "client_credentials"
+
+	// if there is twitch code - it's user token flow
+	if twitchCode != "" {
+		grantType = "authorization_code"
+
+		query.Add("code", twitchCode)
+		query.Add("redirect_uri", fmt.Sprintf("%s://%s", twc.protocol, twc.redirectAddr))
+	}
+	query.Add("grant_type", grantType)
+
 	req.URL.RawQuery = query.Encode()
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	readedResp, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
+	if resp.StatusCode != http.StatusOK {
+		if expectableErrorCode[resp.StatusCode] {
+
+			readedResp, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+
+			var errorResp models.ValidateTokenInvalid
+			err = jsoniter.Unmarshal(readedResp, &errorResp)
+			if err != nil {
+				return nil, err
+			}
+
+			return nil, errors.New(errorResp.Message)
+		}
+
+		return nil, errors.Errorf("[%s] get token failed with status code: %d", grantType, resp.StatusCode)
 	}
 
-	var tokenInfo models.TwitchOautGetUserTokenResponse
-	err = jsoniter.Unmarshal(readedResp, &tokenInfo)
+	readedResp, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	data = &tokenInfo
+	var response models.TwitchOautGetTokenResponse
+	err = jsoniter.Unmarshal(readedResp, &response)
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	return &response, nil
 }
 
-func (twc *TwitchOauthClient) TwitchGetUserTokenRefresh(ctx context.Context, token string) (data *models.TwitchOautGetUserTokenResponse, err error) {
+func (twc *TwitchOauthClient) TwitchGetUserTokenRefresh(
+	ctx context.Context,
+	token string,
+) (*models.TwitchOautGetTokenResponse, error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -79,38 +113,98 @@ func (twc *TwitchOauthClient) TwitchGetUserTokenRefresh(ctx context.Context, tok
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	readedResp, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusBadRequest {
+		if expectableErrorCode[resp.StatusCode] {
 
-			var invalidTokenResp models.ValidateTokenInvalid
-			err = jsoniter.Unmarshal(readedResp, &invalidTokenResp)
+			readedResp, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return nil, err
 			}
 
-			return nil, errors.New("Invalid refresh token")
+			var errorResp models.ValidateTokenInvalid
+			err = jsoniter.Unmarshal(readedResp, &errorResp)
+			if err != nil {
+				return nil, err
+			}
+
+			return nil, errors.New(errorResp.Message)
 		}
 
 		return nil, errors.Errorf("refresh token failed with status code: %d", resp.StatusCode)
 	}
 
-	var tokenInfo models.TwitchOautGetUserTokenResponse
-	err = jsoniter.Unmarshal(readedResp, &tokenInfo)
+	readedResp, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	data = &tokenInfo
+	var response models.TwitchOautGetTokenResponse
+	err = jsoniter.Unmarshal(readedResp, &response)
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	return &response, nil
+}
+
+func (twc *TwitchOauthClient) TwitchOAuthValidateToken(
+	ctx context.Context,
+	token string,
+) (*models.TwitchOautValidateTokenResponse, error) {
+
+	client := http.Client{
+		Timeout: time.Second * 5,
+	}
+
+	req, err := http.NewRequest("GET", twitchIDSchemeHost+"/oauth2/validate", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("OAuth %s", token))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		if expectableErrorCode[resp.StatusCode] {
+
+			readedResp, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+
+			var errorResp models.ValidateTokenInvalid
+			err = jsoniter.Unmarshal(readedResp, &errorResp)
+			if err != nil {
+				return nil, err
+			}
+
+			return nil, errors.New(errorResp.Message)
+		}
+
+		return nil, errors.Errorf("validate token failed with status code: %d", resp.StatusCode)
+	}
+
+	readedResp, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var response models.TwitchOautValidateTokenResponse
+	err = jsoniter.Unmarshal(readedResp, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }

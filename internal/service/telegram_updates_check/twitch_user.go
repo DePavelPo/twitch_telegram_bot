@@ -36,7 +36,7 @@ func (tmcs *TelegramUpdatesCheckService) twitchUserCase(
 
 	users, err := tmcs.twitchClient.GetUserInfo(ctx, []string{userLogin})
 	if err != nil {
-		logrus.Error(err)
+		logrus.Errorf("get user info failed: %s", err.Error())
 		photo.Caption = somethingWrong
 		return
 	}

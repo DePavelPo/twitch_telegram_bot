@@ -6,5 +6,5 @@ import (
 )
 
 func (tws *TwitchService) GetOAuthToken(ctx context.Context) (*models.TwitchOautGetTokenResponse, error) {
-	return tws.twitchOauthClient.TwitchOAuthGetToken(ctx)
+	return tws.twitchOauthClient.TwitchOAuthGetToken(ctx, "")
 }

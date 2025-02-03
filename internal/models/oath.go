@@ -7,11 +7,11 @@ var (
 	ChannelReadSubs Scope = "channel:read:subscriptions"
 )
 
-type TwitchOautGetTokenResponse struct {
-	Token     string `json:"access_token"`
-	ExpiresIn uint64 `json:"expires_in"`
-	TokenType string `json:"token_type"`
-}
+// type TwitchOautGetTokenResponse struct {
+// 	Token     string `json:"access_token"`
+// 	ExpiresIn uint64 `json:"expires_in"`
+// 	TokenType string `json:"token_type"`
+// }
 
 type TwitchOautValidateTokenResponse struct {
 	ClientId  string   `json:"client_id"`
@@ -21,11 +21,11 @@ type TwitchOautValidateTokenResponse struct {
 	ExpiresIn uint64   `json:"expires_in"`
 }
 
-type TwitchOautGetUserTokenResponse struct {
+type TwitchOautGetTokenResponse struct {
 	AccessToken  string   `json:"access_token"`
 	ExpiresIn    int32    `json:"expires_in"`
-	RefreshToken string   `json:"refresh_token"`
-	Scope        []string `json:"scope"`
+	RefreshToken string   `json:"refresh_token"` // for user token
+	Scope        []string `json:"scope"`         // for user token
 	TokenType    string   `json:"token_type"`
 }
 

@@ -107,7 +107,7 @@ func (tts *TwitchTokenService) Sync(ctx context.Context) error {
 			return nil
 		}
 
-		return errors.Wrap(err, "TwitchOAuthGetToken")
+		return errors.Wrap(err, "TwitchOAuthValidateToken")
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -120,16 +120,16 @@ func (tts *TwitchTokenService) Sync(ctx context.Context) error {
 }
 
 func (tts *TwitchTokenService) updateToken(ctx context.Context) error {
-	tokenInfo, err := tts.twitchOauthClient.TwitchOAuthGetToken(ctx)
+	tokenInfo, err := tts.twitchOauthClient.TwitchOAuthGetToken(ctx, "")
 	if err != nil {
-		return errors.Wrap(err, "TwitchOAuthGetToken")
+		return errors.Wrap(err, "get twitch client token")
 	}
 
 	if tokenInfo == nil {
 		return errors.Wrap(errors.New("empty client resp"), "TwitchOAuthGetToken")
 	}
 
-	tts.token = tokenInfo.Token
+	tts.token = tokenInfo.AccessToken
 	return nil
 }
 

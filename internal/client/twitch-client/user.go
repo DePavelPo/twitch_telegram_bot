@@ -3,7 +3,7 @@ package twitch_client
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -16,8 +16,7 @@ import (
 
 var digitCheck = regexp.MustCompile(`^[0-9]+$`) // check if have only digits
 
-// TODO: запрос не возвращает инфу по несуществующему пользователю
-func (twc *TwitchClient) GetUserInfo(ctx context.Context, ids []string) (data *models.GetUserInfoResponse, err error) {
+func (twc *TwitchClient) GetUserInfo(ctx context.Context, ids []string) (*models.GetUserInfoResponse, error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -25,7 +24,7 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, ids []string) (data *m
 
 	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/users", nil)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	query := req.URL.Query()
@@ -43,42 +42,40 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, ids []string) (data *m
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusUnauthorized {
-			readedResp, err := ioutil.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusBadRequest {
+			readedResp, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return nil, err
 			}
 
-			var unauthorizedResp models.GetUserUnauthorized
-			err = jsoniter.Unmarshal(readedResp, &unauthorizedResp)
+			var errorResp models.TwitchError
+			err = jsoniter.Unmarshal(readedResp, &errorResp)
 			if err != nil {
 				return nil, err
 			}
 
-			return nil, errors.New(unauthorizedResp.Message)
+			return nil, errors.New(errorResp.Message)
 		}
 
 		return nil, errors.Errorf("get twitch users failed with status code: %d", resp.StatusCode)
 	}
 
-	readedResp, err := ioutil.ReadAll(resp.Body)
+	readedResp, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	var usersInfo models.GetUserInfoResponse
-	err = jsoniter.Unmarshal(readedResp, &usersInfo)
+	var response models.GetUserInfoResponse
+	err = jsoniter.Unmarshal(readedResp, &response)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	data = &usersInfo
-
-	return
+	return &response, nil
 }

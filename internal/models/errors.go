@@ -6,7 +6,7 @@ const (
 	InvalidOathToken    string = "Invalid OAuth token"
 )
 
-type GetUserUnauthorized struct {
+type TwitchError struct {
 	Error   string `json:"error"`
 	Status  int    `json:"status"`
 	Message string `json:"message"`

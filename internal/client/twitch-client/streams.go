@@ -3,7 +3,7 @@ package twitch_client
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -27,7 +27,7 @@ func NewTwitchClient(twitchTokenService *twitch_token_service.TwitchTokenService
 	}
 }
 
-func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []string) (data *models.Streams, err error) {
+func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []string) (*models.Streams, error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -35,7 +35,7 @@ func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []s
 
 	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/streams", nil)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	query := req.URL.Query()
@@ -53,47 +53,45 @@ func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []s
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusUnauthorized {
-			readedResp, err := ioutil.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusBadRequest {
+			readedResp, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return nil, err
 			}
 
-			var unauthorizedResp models.GetUserUnauthorized
-			err = jsoniter.Unmarshal(readedResp, &unauthorizedResp)
+			var errorResp models.TwitchError
+			err = jsoniter.Unmarshal(readedResp, &errorResp)
 			if err != nil {
 				return nil, err
 			}
 
-			return nil, errors.New(unauthorizedResp.Message)
+			return nil, errors.New(errorResp.Message)
 		}
 
 		return nil, errors.Errorf("get twitch streams failed with status code: %d", resp.StatusCode)
 	}
 
-	readedResp, err := ioutil.ReadAll(resp.Body)
+	readedResp, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var streamsInfo models.Streams
 	err = jsoniter.Unmarshal(readedResp, &streamsInfo)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	data = &streamsInfo
-
-	return
+	return &streamsInfo, nil
 }
 
-func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID, token string) (data *models.Streams, err error) {
+func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID, token string) (*models.Streams, error) {
 
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -101,7 +99,7 @@ func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID, t
 
 	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/streams/followed", nil)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	query := req.URL.Query()
@@ -113,19 +111,19 @@ func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID, t
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusUnauthorized {
-			readedResp, err := ioutil.ReadAll(resp.Body)
+			readedResp, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return nil, err
 			}
 
-			var unauthorizedResp models.GetUserUnauthorized
+			var unauthorizedResp models.TwitchError
 			err = jsoniter.Unmarshal(readedResp, &unauthorizedResp)
 			if err != nil {
 				return nil, err
@@ -137,18 +135,16 @@ func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID, t
 		return nil, errors.Errorf("get twitch streams failed with status code: %d", resp.StatusCode)
 	}
 
-	readedResp, err := ioutil.ReadAll(resp.Body)
+	readedResp, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var streamsInfo models.Streams
 	err = jsoniter.Unmarshal(readedResp, &streamsInfo)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	data = &streamsInfo
-
-	return
+	return &streamsInfo, nil
 }

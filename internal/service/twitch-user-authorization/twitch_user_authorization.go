@@ -133,9 +133,9 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 
 	if data.AccessToken == nil {
 
-		tokens, err := tuas.twitchOauthClient.TwitchGetUserToken(ctx, code)
+		tokens, err := tuas.twitchOauthClient.TwitchOAuthGetToken(ctx, code)
 		if err != nil {
-			return errors.Wrap(err, "TwitchGetUserToken")
+			return errors.Wrap(err, "get twitch user token")
 		}
 
 		err = tuas.dbRepo.UpdateChatTokensByState(ctx, state, tokens.AccessToken, tokens.RefreshToken)
@@ -176,9 +176,9 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 
 				if err.Error() == models.RefreshTokenInvalid {
 
-					tokens, err := tuas.twitchOauthClient.TwitchGetUserToken(ctx, code)
+					tokens, err := tuas.twitchOauthClient.TwitchOAuthGetToken(ctx, code)
 					if err != nil {
-						return errors.Wrap(err, "TwitchGetUserToken")
+						return errors.Wrap(err, "get twitch user token")
 					}
 
 					validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, tokens.AccessToken)
