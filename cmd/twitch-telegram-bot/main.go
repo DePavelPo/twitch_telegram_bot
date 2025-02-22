@@ -11,6 +11,7 @@ import (
 	telegramClient "twitch_telegram_bot/internal/client/telegram-client"
 	twitchClient "twitch_telegram_bot/internal/client/twitch-client"
 	twitchOauthClient "twitch_telegram_bot/internal/client/twitch-oauth-client"
+	"twitch_telegram_bot/internal/middleware"
 
 	telegramHandler "twitch_telegram_bot/internal/handlers/telegram"
 	twitchHandler "twitch_telegram_bot/internal/handlers/twitch"
@@ -50,11 +51,9 @@ func main() {
 	case localENV:
 		protocol = "http"
 		directAddr = os.Getenv("LOCAL_DIRECT_ADDR")
-		redirectAddr = os.Getenv("LOCAL_REDIRECT_ADDR")
 	case prodENV:
 		protocol = "https"
 		directAddr = os.Getenv("DIRECT_ADDR")
-		redirectAddr = os.Getenv("REDIRECT_ADDR")
 	default:
 		logrus.Fatalf("unknown env: %s", os.Getenv("CURRENT_ENV"))
 	}
@@ -108,26 +107,27 @@ func main() {
 	telegaHandler := telegramHandler.NewTelegramHandler(telegaService)
 	twitchHandler := twitchHandler.NewTwitchHandler(twitchService, tuas)
 
-	router1 := mux.NewRouter()
-	router2 := mux.NewRouter()
+	router := mux.NewRouter()
 
-	router2.HandleFunc("/", twitchHandler.GetUserToken)
+	router.HandleFunc("/user/token/get", twitchHandler.GetUserToken).Methods("POST").Schemes("HTTP")
 
-	router1.HandleFunc("/commands", telegaHandler.GetBotData).Methods("GET").Schemes("HTTP")
+	router.HandleFunc("/commands", telegaHandler.GetBotData).Methods("GET").Schemes("HTTP")
 
-	router1.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
-	router1.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
-	router1.HandleFunc("/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
+	router.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
+	router.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
+	router.HandleFunc("/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
+
+	// Configure CORS
+	handler := middleware.ConfigureCORS(router)
 
 	logrus.Info("server start...")
 
 	wg := new(sync.WaitGroup)
 
 	wg.Add(1)
-
 	go func() {
 		srv := &http.Server{
-			Handler:      router1,
+			Handler:      handler,
 			Addr:         directAddr,
 			WriteTimeout: 5 * time.Second,
 			ReadTimeout:  5 * time.Second,
@@ -135,20 +135,6 @@ func main() {
 
 		logrus.Fatal(srv.ListenAndServe())
 		wg.Done()
-
-	}()
-
-	go func() {
-		srv := &http.Server{
-			Handler:      router2,
-			Addr:         redirectAddr,
-			WriteTimeout: 5 * time.Second,
-			ReadTimeout:  5 * time.Second,
-		}
-
-		logrus.Fatal(srv.ListenAndServe())
-		wg.Done()
-
 	}()
 
 	wg.Wait()

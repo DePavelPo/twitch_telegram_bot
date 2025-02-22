@@ -5,6 +5,10 @@ export $(shell sed 's/=.*//' .env)
 run:
 	go run cmd/twitch-telegram-bot/main.go
 
+.PHONY: run-test
+run-test:
+	go run cmd/test/main.go
+
 .PHONY: migrate
 migrate:
 	go run cmd/migrate/main.go
