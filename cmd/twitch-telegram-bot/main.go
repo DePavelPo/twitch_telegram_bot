@@ -46,14 +46,14 @@ func main() {
 		logrus.Fatal("Error loading .env file")
 	}
 
-	var protocol, directAddr, redirectAddr string
+	directAddr, debugAddr, redirectAddr := os.Getenv("DIRECT_ADDR"), os.Getenv("DEBUG_ADDR"), os.Getenv("REDIRECT_ADDR")
+
+	var protocol string
 	switch os.Getenv("CURRENT_ENV") {
 	case localENV:
 		protocol = "http"
-		directAddr = os.Getenv("LOCAL_DIRECT_ADDR")
 	case prodENV:
 		protocol = "https"
-		directAddr = os.Getenv("DIRECT_ADDR")
 	default:
 		logrus.Fatalf("unknown env: %s", os.Getenv("CURRENT_ENV"))
 	}
@@ -107,24 +107,35 @@ func main() {
 	telegaHandler := telegramHandler.NewTelegramHandler(telegaService)
 	twitchHandler := twitchHandler.NewTwitchHandler(twitchService, tuas)
 
-	router := mux.NewRouter()
+	debugRouter, directRouter := mux.NewRouter(), mux.NewRouter()
 
-	router.HandleFunc("/user/token/get", twitchHandler.GetUserToken).Methods("POST").Schemes("HTTP")
+	debugRouter.HandleFunc("/commands", telegaHandler.GetBotData).Methods("GET").Schemes("HTTP")
+	debugRouter.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
+	debugRouter.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
+	debugRouter.HandleFunc("/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
 
-	router.HandleFunc("/commands", telegaHandler.GetBotData).Methods("GET").Schemes("HTTP")
-
-	router.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
-	router.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
-	router.HandleFunc("/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
+	directRouter.HandleFunc("/user/token/get", twitchHandler.GetUserToken).Methods("POST").Schemes("HTTP")
 
 	// Configure CORS
-	handler := middleware.ConfigureCORS(router)
+	handler := middleware.ConfigureCORS(directRouter)
 
 	logrus.Info("server start...")
 
 	wg := new(sync.WaitGroup)
 
-	wg.Add(1)
+	wg.Add(2)
+	go func() {
+		srv := &http.Server{
+			Handler:      debugRouter,
+			Addr:         debugAddr,
+			WriteTimeout: 5 * time.Second,
+			ReadTimeout:  5 * time.Second,
+		}
+
+		logrus.Fatal(srv.ListenAndServe())
+		wg.Done()
+	}()
+
 	go func() {
 		srv := &http.Server{
 			Handler:      handler,
