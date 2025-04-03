@@ -114,11 +114,9 @@ func (tuas *TwitchUserAuthorizationService) TwitchCreateOAuth2Link(ctx context.C
 }
 
 func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.Context, code, state string, scope []string) error {
-
 	data, err := tuas.dbRepo.UpdateScopeAndGetTokens(ctx, scope, state)
 
 	if err != nil {
-
 		if err == sql.ErrNoRows {
 			logrus.Error("GetTokensByState error: state not found")
 		}
@@ -132,7 +130,6 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 	}
 
 	if data.AccessToken == nil {
-
 		tokens, err := tuas.twitchOauthClient.TwitchOAuthGetToken(ctx, code)
 		if err != nil {
 			return errors.Wrap(err, "get twitch user token")
@@ -164,7 +161,6 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 		}
 
 		return nil
-
 	}
 
 	validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, *data.AccessToken)
@@ -173,7 +169,6 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 
 			newTokens, err := tuas.twitchOauthClient.TwitchGetUserTokenRefresh(ctx, *data.RefreshToken)
 			if err != nil {
-
 				if err.Error() == models.RefreshTokenInvalid {
 
 					tokens, err := tuas.twitchOauthClient.TwitchOAuthGetToken(ctx, code)
@@ -207,9 +202,7 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 					}
 
 					return nil
-
 				}
-
 				return errors.Wrap(err, "TwitchGetUserTokenRefresh")
 			}
 
@@ -239,7 +232,6 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByState(ctx context.C
 			}
 
 			return nil
-
 		}
 		return errors.Wrap(err, "TwitchOAuthValidateToken")
 	}

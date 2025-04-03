@@ -17,6 +17,11 @@ const (
 	tokenInvalid          = "token invalid"
 )
 
+var tokenInvalidTextExpectation = map[string]bool{
+	"token invalid":        true,
+	"invalid access token": true,
+}
+
 type TwitchTokenService struct {
 	dbRepo            *dbRepository.DBRepository
 	token             string
@@ -83,7 +88,7 @@ func (tts *TwitchTokenService) Sync(ctx context.Context) error {
 
 	_, err = tts.twitchOauthClient.TwitchOAuthValidateToken(ctx, *token)
 	if err != nil {
-		if err.Error() == tokenInvalid {
+		if tokenInvalidTextExpectation[err.Error()] {
 
 			err = tts.updateToken(ctx)
 			if err != nil {
