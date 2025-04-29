@@ -9,6 +9,7 @@ import (
 )
 
 func (twh *TwitchHandler) GetUserToken(w http.ResponseWriter, r *http.Request) {
+	logrus.Info("got GetUserToken request")
 
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
