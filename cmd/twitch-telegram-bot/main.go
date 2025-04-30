@@ -47,15 +47,16 @@ func main() {
 	}
 
 	directAddr, debugAddr, redirectAddr := os.Getenv("DIRECT_ADDR"), os.Getenv("DEBUG_ADDR"), os.Getenv("REDIRECT_ADDR")
+	env := os.Getenv("CURRENT_ENV")
 
 	var protocol string
-	switch os.Getenv("CURRENT_ENV") {
+	switch env {
 	case localENV:
 		protocol = "http"
 	case prodENV:
 		protocol = "https"
 	default:
-		logrus.Fatalf("unknown env: %s", os.Getenv("CURRENT_ENV"))
+		logrus.Fatalf("unknown env: %s", env)
 	}
 
 	db, err := sqlx.Connect("postgres", os.Getenv("DB_CONN"))
@@ -144,7 +145,12 @@ func main() {
 			ReadTimeout:  5 * time.Second,
 		}
 
-		logrus.Fatal(srv.ListenAndServe())
+		if env == prodENV {
+			logrus.Fatal(srv.ListenAndServeTLS(os.Getenv("CRT_DIR"), os.Getenv("TLS_KEY_DIR")))
+		} else {
+			logrus.Fatal(srv.ListenAndServe())
+		}
+
 		wg.Done()
 	}()
 
