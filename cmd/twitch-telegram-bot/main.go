@@ -145,7 +145,11 @@ func main() {
 			ReadTimeout:  5 * time.Second,
 		}
 
-		logrus.Fatal(srv.ListenAndServe())
+		if env == prodENV {
+			logrus.Fatal(srv.ListenAndServeTLS(os.Getenv("CRT_DIR"), os.Getenv("TLS_KEY_DIR")))
+		} else {
+			logrus.Fatal(srv.ListenAndServe())
+		}
 		wg.Done()
 	}()
 
