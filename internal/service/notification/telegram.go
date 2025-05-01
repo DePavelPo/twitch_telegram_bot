@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
+
+	// "strings"
 	"twitch_telegram_bot/internal/models"
 
 	formater "twitch_telegram_bot/internal/utils/formater"
@@ -20,13 +21,8 @@ func (tn *TwitchNotificationService) ThrowNotification(ctx context.Context, stre
 		return err
 	}
 
-	var photoLink string
-	// TODO: add default photo if current url not created
-	if strings.Contains(stream.ThumbnailUrl, "{width}x{height}") {
-		photoLink = strings.Replace(stream.ThumbnailUrl, "{width}x{height}", "1920x1080", -1)
-	}
-
-	photo := tgbotapi.NewPhoto(int64(chatId), tgbotapi.FileURL(photoLink))
+	// TODO: find the way to use custom photos of channels
+	photo := tgbotapi.NewPhoto(int64(chatId), tgbotapi.FilePath("./sources/twitch_image.png"))
 
 	twitchLink := fmt.Sprintf("https://www.twitch.tv/%s", stream.UserLogin)
 

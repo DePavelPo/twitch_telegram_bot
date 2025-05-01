@@ -145,11 +145,7 @@ func main() {
 			ReadTimeout:  5 * time.Second,
 		}
 
-		if env == prodENV {
-			logrus.Fatalf("can't serve tls: %v", srv.ListenAndServeTLS(os.Getenv("CRT_DIR"), os.Getenv("TLS_KEY_DIR")))
-		} else {
-			logrus.Fatalf("can't serve: %v", srv.ListenAndServe())
-		}
+		logrus.Fatalf("can't serve: %v", srv.ListenAndServe())
 		wg.Done()
 	}()
 
