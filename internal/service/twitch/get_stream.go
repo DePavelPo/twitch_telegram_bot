@@ -8,7 +8,6 @@ import (
 )
 
 func (tws *TwitchService) GetActiveStreamInfoByUser(ctx context.Context, id string) (*models.Streams, error) {
-
 	usersStruct := []string{id}
 
 	streamInfo, err := tws.twitchClient.GetActiveStreamInfoByUsers(ctx, usersStruct)
@@ -17,7 +16,7 @@ func (tws *TwitchService) GetActiveStreamInfoByUser(ctx context.Context, id stri
 	}
 
 	if streamInfo == nil {
-		return streamInfo, errors.New("empty response stuct")
+		return streamInfo, errors.New("empty response struct")
 	}
 
 	if len(streamInfo.StreamInfo) < 1 {
@@ -25,12 +24,9 @@ func (tws *TwitchService) GetActiveStreamInfoByUser(ctx context.Context, id stri
 	}
 
 	if streamInfo.StreamInfo[0].UserId != id && streamInfo.StreamInfo[0].UserLogin != id && streamInfo.StreamInfo[0].UserName != id {
-		return nil, errors.Errorf("invalid reponse data, give %s, got id %s, login %s, name %s",
+		return nil, errors.Errorf("invalid response data, give %s, got id %s, login %s, name %s",
 			id, streamInfo.StreamInfo[0].UserId, streamInfo.StreamInfo[0].UserLogin, streamInfo.StreamInfo[0].UserName)
 	}
 
-	// TODO: отредактировать width и height в поле ThumbnailUrl, мб под 16:9
-
 	return streamInfo, nil
-
 }

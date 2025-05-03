@@ -46,7 +46,7 @@ func main() {
 		logrus.Fatal("Error loading .env file")
 	}
 
-	directAddr, debugAddr, redirectAddr := os.Getenv("DIRECT_ADDR"), os.Getenv("DEBUG_ADDR"), os.Getenv("REDIRECT_ADDR")
+	apiAddr, debugAddr, redirectAddr := os.Getenv("API_ADDR"), os.Getenv("DEBUG_ADDR"), os.Getenv("REDIRECT_ADDR")
 	env := os.Getenv("CURRENT_ENV")
 
 	var protocol string
@@ -105,20 +105,19 @@ func main() {
 	}
 	go tucs.SyncBg(ctx, time.Second*1)
 
-	telegaHandler := telegramHandler.NewTelegramHandler(telegaService)
+	_ = telegramHandler.NewTelegramHandler(telegaService)
 	twitchHandler := twitchHandler.NewTwitchHandler(twitchService, tuas)
 
-	debugRouter, directRouter := mux.NewRouter(), mux.NewRouter()
-
-	debugRouter.HandleFunc("/commands", telegaHandler.GetBotData).Methods("GET").Schemes("HTTP")
-	debugRouter.HandleFunc("/twitch/oauth", twitchHandler.GetOAuthToken).Methods("POST").Schemes("HTTP")
-	debugRouter.HandleFunc("/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
-	debugRouter.HandleFunc("/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
-
-	directRouter.HandleFunc("/user/token/get", twitchHandler.GetUserToken).Methods("POST").Schemes("HTTP")
-
+	// api router
+	apiRouter := mux.NewRouter()
+	apiRouter.HandleFunc("/api/user/token/set", twitchHandler.GetUserToken).Methods("POST").Schemes("HTTP")
 	// Configure CORS
-	handler := middleware.ConfigureCORS(directRouter)
+	apiHandlerWithCORS := middleware.ConfigureCORS(apiRouter)
+
+	// admin router
+	debugRouter := mux.NewRouter()
+	debugRouter.HandleFunc("/admin/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
+	debugRouter.HandleFunc("/admin/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
 
 	logrus.Info("server start...")
 
@@ -139,8 +138,8 @@ func main() {
 
 	go func() {
 		srv := &http.Server{
-			Handler:      handler,
-			Addr:         directAddr,
+			Handler:      apiHandlerWithCORS,
+			Addr:         apiAddr,
 			WriteTimeout: 5 * time.Second,
 			ReadTimeout:  5 * time.Second,
 		}
