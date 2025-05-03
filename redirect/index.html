@@ -26,7 +26,7 @@
 
             // Send query parameters to server if there are query parameters in uri
             if (params.toString()) {
-                fetch(`/user/token/get?` + params.toString(), { method: "POST" })
+                fetch(`/api/user/token/set?` + params.toString(), { method: "POST" })
 
                 .then(response => response.json())
                 .then(data => console.log("Response from server:", data))
