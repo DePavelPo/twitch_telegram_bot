@@ -4,12 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wires</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Hi</h1>
+    <div class="center-container">
+      <h1>Hi</h1>
+      <img src="Wire_Cat.png">
+    </div>
 
     <script src="config.js"></script>
-	<script>
+        <script>
 
         function getQueryParams() {
             let params = new URLSearchParams(window.location.search);
@@ -20,13 +24,9 @@
             });
 
 
-            // Send query parameters to server
+            // Send query parameters to server if there are query parameters in uri
             if (params.toString()) {
-
-                fetch(`${CONFIG.REDIRECT_ADDR}/user/token/get?` + params.toString(), {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" }
-                })
+                fetch(`/user/token/get?` + params.toString(), { method: "POST" })
 
                 .then(response => response.json())
                 .then(data => console.log("Response from server:", data))
