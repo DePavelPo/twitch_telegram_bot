@@ -22,7 +22,7 @@ func (twc *TwitchClient) GetUserInfo(ctx context.Context, ids []string) (*models
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/users", nil)
+	req, err := http.NewRequest("GET", models.TwitchApiSchemeHost+"/helix/users", nil)
 	if err != nil {
 		return nil, err
 	}

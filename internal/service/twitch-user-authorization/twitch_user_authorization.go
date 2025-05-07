@@ -14,10 +14,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const (
-	twitchIDSchemeHost string = "https://id.twitch.tv"
-)
-
 type CheckUserTokensByChatResp struct {
 	AccessToken string
 	UserID      string
@@ -25,7 +21,6 @@ type CheckUserTokensByChatResp struct {
 }
 
 func (tuas *TwitchUserAuthorizationService) CheckUserTokensByChat(ctx context.Context, chatID uint64) (CheckUserTokensByChatResp, error) {
-
 	data, err := tuas.dbRepo.GetTokensByChat(ctx, chatID)
 	if err != nil {
 
@@ -103,7 +98,7 @@ func (tuas *TwitchUserAuthorizationService) TwitchCreateOAuth2Link(ctx context.C
 
 	url := fmt.Sprintf(
 		"%s/oauth2/authorize?client_id=%s&response_type=code&redirect_uri=%s://%s&scope=user:read:follows+channel:read:subscriptions&state=%s",
-		twitchIDSchemeHost,
+		models.TwitchIDSchemeHost,
 		os.Getenv("TWITCH_CLIENT_ID"),
 		tuas.protocol,
 		tuas.redirectAddr,

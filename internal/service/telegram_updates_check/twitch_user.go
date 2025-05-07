@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"twitch_telegram_bot/internal/models"
 	formater "twitch_telegram_bot/internal/utils/formater"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -117,7 +118,8 @@ func (tmcs *TelegramUpdatesCheckService) twitchUserCase(
 	newPhoto.ReplyToMessageID = updateInfo.Message.MessageID
 	newPhoto.Caption = photo.Caption
 
-	newPhoto = formater.CreateTelegramSingleButtonLinkForPhoto(newPhoto, fmt.Sprintf("https://www.twitch.tv/%s", user.Login), "Open the channel", updateInfo.Message.MessageID)
+	newPhoto = formater.CreateTelegramSingleButtonLinkForPhoto(newPhoto,
+		fmt.Sprintf("%s/%s", models.TwitchWWWSchemeHost, user.Login), "Open the channel", updateInfo.Message.MessageID)
 
 	return newPhoto, isFound
 }

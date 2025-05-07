@@ -17,7 +17,6 @@ const (
 )
 
 func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
-
 	var (
 		lastId      uint64    = 0
 		currentTime time.Time = time.Now()
@@ -51,7 +50,6 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 				}
 
 				if tokens.AccessToken != nil {
-
 					var streams *models.Streams
 
 					streams, err = tn.twitchClient.GetActiveFollowedStreams(ctx, notification.TwitchUser, *tokens.AccessToken)
@@ -85,16 +83,13 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 							}
 
 						} else {
-
 							return errors.Wrap(err, "GetActiveFollowedStreams")
-
 						}
-
 					}
 
+					// by followed users notifications flow
 					if streams != nil {
-
-						err = tn.LogAndThrowNotifications(ctx, streams.StreamInfo, notification.TwitchUser, notification.ChatId, currentTime)
+						err = tn.LogAndThrowNotifications(ctx, streams.StreamInfo, notification.TwitchUser, notification.ChatId, currentTime, true)
 						if err != nil {
 							return errors.Wrap(err, "LogAndThrowNotifications")
 						}
@@ -107,21 +102,23 @@ func (tn *TwitchNotificationService) Sync(ctx context.Context) error {
 
 		}
 
-		streams, err := tn.twitchClient.GetActiveStreamInfoByUsers(ctx, users)
-		if err != nil {
-			return errors.Wrap(err, "GetActiveStreamInfoByUsers")
+		var streams *models.Streams
+		if len(users) > 0 {
+			streams, err = tn.twitchClient.GetActiveStreamInfoByUsers(ctx, users)
+			if err != nil {
+				return errors.Wrap(err, "GetActiveStreamInfoByUsers")
+			}
 		}
-
+		// by specific users notifications flow
 		if streams != nil {
 			for _, notification := range notifications {
-				err = tn.LogAndThrowNotifications(ctx, streams.StreamInfo, notification.TwitchUser, notification.ChatId, currentTime)
+				err = tn.LogAndThrowNotifications(ctx, streams.StreamInfo, notification.TwitchUser, notification.ChatId, currentTime, false)
 				if err != nil {
 					return errors.Wrap(err, "LogAndThrowNotifications")
 				}
 			}
 
 		}
-
 	}
 }
 
@@ -132,10 +129,11 @@ func (tn *TwitchNotificationService) LogAndThrowNotifications(
 	twitchUser string,
 	chatID uint64,
 	currentTime time.Time,
+	isFollowed bool,
 ) error {
-
 	for _, streamInfo := range streamsInfo {
-		if slices.Contains([]string{streamInfo.UserId, streamInfo.UserLogin, streamInfo.UserName}, twitchUser) {
+		if slices.Contains([]string{streamInfo.UserId, streamInfo.UserLogin, streamInfo.UserName}, twitchUser) ||
+			isFollowed {
 
 			tx, err := tn.dbRepo.BeginTransaction(ctx)
 			if err != nil {

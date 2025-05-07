@@ -4,10 +4,6 @@ import (
 	"net/http"
 )
 
-const (
-	twitchIDSchemeHost string = "https://id.twitch.tv"
-)
-
 var expectableErrorCode = map[int]bool{
 	http.StatusBadRequest:   true,
 	http.StatusUnauthorized: true,

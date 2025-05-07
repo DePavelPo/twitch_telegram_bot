@@ -34,7 +34,7 @@ func (tn *TwitchNotificationService) ThrowNotification(ctx context.Context, stre
 		formater.CreateStreamDuration(stream.StartedAt),
 		stream.ViewerCount)
 
-	twitchLink := fmt.Sprintf("https://www.twitch.tv/%s", stream.UserLogin)
+	twitchLink := fmt.Sprintf("%s/%s", models.TwitchWWWSchemeHost, stream.UserLogin)
 	photo = formater.CreateTelegramSingleButtonLinkForPhoto(photo, twitchLink, "Open the channel", 0)
 
 	// using Markdown for hyperlinks

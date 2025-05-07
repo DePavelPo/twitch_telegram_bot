@@ -15,8 +15,6 @@ import (
 	twitch_token_service "twitch_telegram_bot/internal/service/twitch_token"
 )
 
-const twitchApiSchemeHost string = "https://api.twitch.tv"
-
 type TwitchClient struct {
 	twitchTokenService *twitch_token_service.TwitchTokenService
 }
@@ -28,12 +26,11 @@ func NewTwitchClient(twitchTokenService *twitch_token_service.TwitchTokenService
 }
 
 func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []string) (*models.Streams, error) {
-
 	client := http.Client{
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/streams", nil)
+	req, err := http.NewRequest("GET", models.TwitchApiSchemeHost+"/helix/streams", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -92,12 +89,11 @@ func (twc *TwitchClient) GetActiveStreamInfoByUsers(ctx context.Context, ids []s
 }
 
 func (twc *TwitchClient) GetActiveFollowedStreams(ctx context.Context, userID, token string) (*models.Streams, error) {
-
 	client := http.Client{
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", twitchApiSchemeHost+"/helix/streams/followed", nil)
+	req, err := http.NewRequest("GET", models.TwitchApiSchemeHost+"/helix/streams/followed", nil)
 	if err != nil {
 		return nil, err
 	}

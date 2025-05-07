@@ -22,7 +22,7 @@ func (twc *TwitchOauthClient) TwitchOAuthGetToken(
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("POST", twitchIDSchemeHost+"/oauth2/token", nil)
+	req, err := http.NewRequest("POST", models.TwitchIDSchemeHost+"/oauth2/token", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (twc *TwitchOauthClient) TwitchGetUserTokenRefresh(
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("POST", twitchIDSchemeHost+"/oauth2/token", nil)
+	req, err := http.NewRequest("POST", models.TwitchIDSchemeHost+"/oauth2/token", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (twc *TwitchOauthClient) TwitchOAuthValidateToken(
 		Timeout: time.Second * 5,
 	}
 
-	req, err := http.NewRequest("GET", twitchIDSchemeHost+"/oauth2/validate", nil)
+	req, err := http.NewRequest("GET", models.TwitchIDSchemeHost+"/oauth2/validate", nil)
 	if err != nil {
 		return nil, err
 	}

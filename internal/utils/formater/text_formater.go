@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"twitch_telegram_bot/internal/models"
 )
 
 func ToLower(text string) string {
@@ -15,7 +16,7 @@ func TwitchTagToTelegram(text string) string {
 	var re = regexp.MustCompile(`@[^\s.,!?]+`)
 	matches := re.FindAllString(text, -1)
 	for _, match := range matches {
-		text = strings.ReplaceAll(text, match, fmt.Sprintf("[%s](https://www.twitch.tv/%s)", match, match[1:]))
+		text = strings.ReplaceAll(text, match, fmt.Sprintf("[%s](%s/%s)", match, models.TwitchWWWSchemeHost, match[1:]))
 	}
 
 	return text
