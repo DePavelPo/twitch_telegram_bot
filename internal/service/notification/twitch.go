@@ -149,7 +149,7 @@ func (tn *TwitchNotificationService) LogAndThrowNotifications(
 
 			err = tn.dbRepo.AddTwitchNotificationLog(ctx, tx, streamIdInt, chatID)
 			if err != nil {
-				logrus.Errorf("cannot add notification log for %d", streamIdInt)
+				logrus.Warnf("cannot add notification log for %d", streamIdInt)
 				tx.Rollback()
 				continue
 			}
