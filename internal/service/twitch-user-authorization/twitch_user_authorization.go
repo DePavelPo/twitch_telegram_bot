@@ -51,7 +51,6 @@ func (tuas *TwitchUserAuthorizationService) CheckUserTokensByChat(ctx context.Co
 	}
 
 	validData, err := tuas.twitchOauthClient.TwitchOAuthValidateToken(ctx, *data.AccessToken)
-
 	if err != nil {
 		if err.Error() == models.TokenInvalid {
 

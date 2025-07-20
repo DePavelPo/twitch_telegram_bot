@@ -8,7 +8,6 @@ import (
 )
 
 func (s *TelegramService) GetBotCommands(ctx context.Context) (res *models.TeleBotCommands, err error) {
-
 	data, err := s.telegramClient.GetBotCommands(ctx)
 	if err != nil {
 		return nil, err
@@ -17,14 +16,11 @@ func (s *TelegramService) GetBotCommands(ctx context.Context) (res *models.TeleB
 	res = &models.TeleBotCommands{}
 
 	for _, commandInfo := range data {
-
 		command := models.TeleBotCommand{
 			Command:     fmt.Sprintf("/%s", commandInfo.Command),
 			Description: commandInfo.Description,
 		}
-
 		res.Commands = append(res.Commands, command)
 	}
-
 	return
 }

@@ -13,32 +13,26 @@ func (tmcs *TelegramUpdatesCheckService) twitchAddFollowedNotification(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
 ) (msg tgbotapi.MessageConfig, err error) {
-
 	msg.ChatID = updateInfo.Message.Chat.ID
 	msg.ReplyToMessageID = updateInfo.Message.MessageID
 
 	data, err := tmcs.twitchUserAuthservice.CheckUserTokensByChat(ctx, uint64(updateInfo.Message.Chat.ID))
 	if err != nil {
-
 		msg.Text = somethingWrong
-
 		return msg, errors.Wrap(err, "CheckUserTokensByChat")
 	}
 
 	if data.Link != "" {
-
 		resp := "To use this feature, follow the link and provide access to the necessary information"
 		msg.Text = resp
 
 		msg = formater.CreateTelegramSingleButtonLink(msg, data.Link, "Open Link", updateInfo.Message.MessageID)
-
 		return
 	}
 
 	err = tmcs.dbRepo.AddTwitchNotification(ctx, uint64(updateInfo.Message.Chat.ID), data.UserID, models.NotificationFollowed)
 	if err != nil {
 		msg.Text = somethingWrong
-
 		return msg, errors.Wrap(err, "AddTwitchNotification")
 	}
 
@@ -51,7 +45,6 @@ func (tmcs *TelegramUpdatesCheckService) twitchCancelFollowedNotification(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
 ) (msg tgbotapi.MessageConfig, err error) {
-
 	msg.ChatID = updateInfo.Message.Chat.ID
 	msg.ReplyToMessageID = updateInfo.Message.MessageID
 
@@ -63,11 +56,9 @@ func (tmcs *TelegramUpdatesCheckService) twitchCancelFollowedNotification(
 			return msg, errors.Errorf("followed streams notification by chatId %d not found", updateInfo.Message.Chat.ID)
 		}
 		msg.Text = somethingWrong
-
 		return msg, errors.Wrap(err, "SetInactiveNotificationByType")
 	}
 
 	msg.Text = "Notifications were disabled successfully"
-
 	return
 }

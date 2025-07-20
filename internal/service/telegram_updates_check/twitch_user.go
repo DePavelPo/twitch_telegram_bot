@@ -21,7 +21,6 @@ func (tmcs *TelegramUpdatesCheckService) twitchUserCase(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
 ) (photo tgbotapi.PhotoConfig, isFound bool) {
-
 	photo.ChatID = updateInfo.Message.Chat.ID
 	photo.ReplyToMessageID = updateInfo.Message.MessageID
 

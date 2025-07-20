@@ -23,14 +23,20 @@ import (
 )
 
 const (
-	somethingWrong string = "Oops, something wrong, try again later or contact my creator"
-	invalidReq     string = "Invalid request, try again. "
+	somethingWrong = "Oops, something wrong, try again later or contact my creator"
+	invalidReq     = "Invalid request, try again. "
+
+	// Time constants
+	messageTimeoutDuration = 15 * time.Second
+	updateTimeoutSeconds   = 60
+
+	// Background sync process name
+	telegramUpdatesCheckBGSync = "telegramUpdatesCheck_BGSync"
 )
 
 type teleCommands string
 
 const (
-	telegramUpdatesCheckBGSync                    = "telegramUpdatesCheck_BGSync"
 	startCommand                     teleCommands = "/start"
 	pingCommand                      teleCommands = "/ping"
 	commands                         teleCommands = "/commands"
@@ -40,6 +46,9 @@ const (
 	twitchFollowedStreamNotify       teleCommands = "/followed_notify"
 	twitchCancelFollowedStreamNotify teleCommands = "/cancel_followed_notify"
 )
+
+// commandHandler represents a function that handles a specific command
+type commandHandler func(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error)
 
 type TelegramUpdatesCheckService struct {
 	twitchClient *twitch_client.TwitchClient
@@ -52,6 +61,9 @@ type TelegramUpdatesCheckService struct {
 	telegramService *telegram_service.TelegramService
 
 	twitchOauthClient *twitch_oauth_client.TwitchOauthClient
+
+	// Command router for efficient command handling
+	commandHandlers map[teleCommands]commandHandler
 }
 
 func NewTelegramUpdatesCheckService(
@@ -63,7 +75,7 @@ func NewTelegramUpdatesCheckService(
 	telegramService *telegram_service.TelegramService,
 	twitchOauthClient *twitch_oauth_client.TwitchOauthClient,
 ) (*TelegramUpdatesCheckService, error) {
-	return &TelegramUpdatesCheckService{
+	service := &TelegramUpdatesCheckService{
 		twitchClient:          twitchClient,
 		fClient:               fClient,
 		dbRepo:                dbRepo,
@@ -71,189 +83,224 @@ func NewTelegramUpdatesCheckService(
 		twitchUserAuthservice: twitchUserAuthservice,
 		telegramService:       telegramService,
 		twitchOauthClient:     twitchOauthClient,
-	}, nil
+	}
+
+	// Initialize command handlers
+	service.initializeCommandHandlers()
+
+	return service, nil
+}
+
+// initializeCommandHandlers sets up the command routing map
+func (tmcs *TelegramUpdatesCheckService) initializeCommandHandlers() {
+	tmcs.commandHandlers = map[teleCommands]commandHandler{
+		startCommand:                     tmcs.handleStart,
+		pingCommand:                      tmcs.handlePing,
+		commands:                         tmcs.handleCommands,
+		twitchUserCommand:                tmcs.handleTwitchUser,
+		twitchStreamNotifi:               tmcs.handleTwitchStreamNotification,
+		twitchCancelStreamNotifi:         tmcs.handleTwitchCancelStreamNotification,
+		twitchFollowedStreamNotify:       tmcs.handleTwitchFollowedNotification,
+		twitchCancelFollowedStreamNotify: tmcs.handleTwitchCancelFollowedNotification,
+	}
 }
 
 func (tmcs *TelegramUpdatesCheckService) Sync(ctx context.Context) error {
-
 	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_API_TOKEN"))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create bot API: %w", err)
 	}
 
-	logrus.Printf("Authorized on account %s", bot.Self.UserName)
+	logrus.Infof("Authorized on account %s", bot.Self.UserName)
 
 	reader := tgbotapi.NewUpdate(0)
-	reader.Timeout = 60
+	reader.Timeout = updateTimeoutSeconds
 
 	updates := bot.GetUpdatesChan(reader)
 
 	for updateInfo := range updates {
-		if updateInfo.Message != nil {
-			logrus.Printf("[%s] %s", updateInfo.Message.From.UserName, updateInfo.Message.Text)
-
-			timeAndZone := time.Unix(int64(updateInfo.Message.Date), 0)
-
-			msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "")
-
-			timeNow := time.Now()
-			// TODO: подумать, как избежать дубликации ответа
-			if timeAndZone.Add(time.Second * 15).Before(timeNow) {
-
-				msg.Text = "Sorry, I took a little nap ☺️ . Now I'm awake and ready to go! 😎 "
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
-				sendMsgToTelegram(ctx, msg, bot)
-
-				logrus.Printf("skip reason: old time. User %s, message time %s, time now %s", updateInfo.Message.From.UserName, timeAndZone, timeNow)
-				continue
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			if err := tmcs.processUpdate(ctx, updateInfo, bot); err != nil {
+				logrus.Errorf("failed to process update: %v", err)
 			}
-
-			// TODO: добавить валидацию
-			// TODO: расширять функционал
-
-			switch {
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(startCommand)):
-
-				msg, err := tmcs.start(ctx, updateInfo)
-				if err != nil {
-					logrus.Errorf("start error: %s", err.Error())
-				}
-
-				// send result message to telegram bot
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(pingCommand)):
-				msg.Text = "pong"
-				msg.ReplyToMessageID = updateInfo.Message.MessageID
-
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(commands)):
-
-				msg, err := tmcs.commands(ctx, updateInfo)
-				if err != nil {
-					logrus.Errorf("commands error: %s", err.Error())
-				}
-
-				// send result message to telegram bot
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchUserCommand)):
-
-				// get user info from twitch and prepare data
-				if photo, isFound := tmcs.twitchUserCase(ctx, updateInfo); !isFound {
-					msg.ChatID = photo.ChatID
-					msg.ReplyToMessageID = photo.ReplyToMessageID
-					msg.Text = photo.Caption
-
-					// send info without a picture to telegram bot
-					sendMsgToTelegram(ctx, msg, bot)
-
-				} else {
-
-					// send user info with a picture to telegram bot
-					sendPhotoToTelegram(ctx, photo, bot)
-				}
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchStreamNotifi)):
-
-				// go to make a task that notice about channel live streams
-				msg, err := tmcs.twitchAddStreamNotification(ctx, updateInfo)
-				if err != nil {
-					logrus.Errorf("twitch stream notification error: %s", err.Error())
-				}
-
-				// send result message to telegram bot
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchCancelStreamNotifi)):
-
-				// go to cancel a task that notice about channel live streams
-				msg, err := tmcs.twitchCancelStreamNotification(ctx, updateInfo)
-				if err != nil {
-					logrus.Errorf("twitch cancel stream notification error: %s", err.Error())
-				}
-
-				// send result message to telegram bot
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchFollowedStreamNotify)):
-
-				// go to make a task that notice about channels' live streams from user following list on Twitch
-				msg, err := tmcs.twitchAddFollowedNotification(ctx, updateInfo)
-				if err != nil {
-					logrus.Errorf("twitch followed stream notification error: %s", err.Error())
-				}
-
-				// send result message to telegram bot
-				sendMsgToTelegram(ctx, msg, bot)
-
-			case strings.HasPrefix(updateInfo.Message.Text, fmt.Sprint(twitchCancelFollowedStreamNotify)):
-
-				// go to cancel a task that notice about channels' live streams from user following list on Twitch
-				msg, err := tmcs.twitchCancelFollowedNotification(ctx, updateInfo)
-				if err != nil {
-					logrus.Errorf("twitch cancel followed stream notification error: %s", err.Error())
-				}
-
-				// send result message to telegram bot
-				sendMsgToTelegram(ctx, msg, bot)
-
-			default:
-
-			}
-
 		}
-
 	}
 
 	return nil
 }
 
-func sendMsgToTelegram(_ context.Context, resp tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
-	_, err := bot.Send(resp)
+// processUpdate handles a single update from Telegram
+func (tmcs *TelegramUpdatesCheckService) processUpdate(
+	ctx context.Context,
+	updateInfo tgbotapi.Update,
+	bot *tgbotapi.BotAPI,
+) error {
+	if updateInfo.Message == nil {
+		return nil
+	}
+
+	message := updateInfo.Message
+	logrus.Infof("[%s] %s", message.From.UserName, message.Text)
+
+	// Check if message is too old
+	if tmcs.isMessageTooOld(message.Date) {
+		return tmcs.handleOldMessage(ctx, message, bot)
+	}
+
+	// Process command
+	return tmcs.handleCommand(ctx, updateInfo, bot)
+}
+
+// isMessageTooOld checks if a message is older than the allowed timeout
+func (tmcs *TelegramUpdatesCheckService) isMessageTooOld(messageDate int) bool {
+	messageTime := time.Unix(int64(messageDate), 0)
+	return messageTime.Add(messageTimeoutDuration).Before(time.Now())
+}
+
+// handleOldMessage responds to old messages
+func (tmcs *TelegramUpdatesCheckService) handleOldMessage(ctx context.Context, message *tgbotapi.Message, bot *tgbotapi.BotAPI) error {
+	msg := tgbotapi.NewMessage(message.Chat.ID, "Sorry, I took a little nap ☺️ . Now I'm awake and ready to go! 😎")
+	msg.ReplyToMessageID = message.MessageID
+
+	if err := sendMsgToTelegram(ctx, msg, bot); err != nil {
+		return fmt.Errorf("failed to send old message response: %w", err)
+	}
+
+	logrus.Infof("Skipped old message from user %s, message time %s, current time %s",
+		message.From.UserName,
+		time.Unix(int64(message.Date), 0),
+		time.Now())
+
+	return nil
+}
+
+// handleCommand routes and processes commands
+func (tmcs *TelegramUpdatesCheckService) handleCommand(ctx context.Context, updateInfo tgbotapi.Update, bot *tgbotapi.BotAPI) error {
+	text := updateInfo.Message.Text
+
+	// Find matching command
+	for command, handler := range tmcs.commandHandlers {
+		if strings.HasPrefix(text, string(command)) {
+			return tmcs.executeCommand(ctx, updateInfo, bot, handler)
+		}
+	}
+
+	// No command matched - could log or handle as needed
+	logrus.Debugf("No command handler found for text: %s", text)
+	return nil
+}
+
+// executeCommand executes a command handler and sends the response
+func (tmcs *TelegramUpdatesCheckService) executeCommand(ctx context.Context, updateInfo tgbotapi.Update, bot *tgbotapi.BotAPI, handler commandHandler) error {
+	result, err := handler(ctx, updateInfo)
 	if err != nil {
-		logrus.Errorf("telegram send message error: %s", err.Error())
+		logrus.Errorf("Command execution error: %v", err)
+		// Send error message to user
+		msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, somethingWrong)
+		msg.ReplyToMessageID = updateInfo.Message.MessageID
+		return sendMsgToTelegram(ctx, msg, bot)
+	}
+
+	// Send response based on result type
+	switch response := result.(type) {
+	case tgbotapi.MessageConfig:
+		return sendMsgToTelegram(ctx, response, bot)
+	case tgbotapi.PhotoConfig:
+		return sendPhotoToTelegram(ctx, response, bot)
+	default:
+		logrus.Warnf("Unknown response type: %T", result)
+		return nil
 	}
 }
 
-func sendPhotoToTelegram(_ context.Context, resp tgbotapi.PhotoConfig, bot *tgbotapi.BotAPI) {
+// Command handlers
+func (tmcs *TelegramUpdatesCheckService) handleStart(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	return tmcs.start(ctx, updateInfo)
+}
+
+func (tmcs *TelegramUpdatesCheckService) handlePing(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	msg := tgbotapi.NewMessage(updateInfo.Message.Chat.ID, "pong")
+	msg.ReplyToMessageID = updateInfo.Message.MessageID
+	return msg, nil
+}
+
+func (tmcs *TelegramUpdatesCheckService) handleCommands(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	return tmcs.commands(ctx, updateInfo)
+}
+
+func (tmcs *TelegramUpdatesCheckService) handleTwitchUser(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	photo, isFound := tmcs.twitchUserCase(ctx, updateInfo)
+	if !isFound {
+		msg := tgbotapi.NewMessage(photo.ChatID, photo.Caption)
+		msg.ReplyToMessageID = photo.ReplyToMessageID
+		return msg, nil
+	}
+	return photo, nil
+}
+
+func (tmcs *TelegramUpdatesCheckService) handleTwitchStreamNotification(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	return tmcs.twitchAddStreamNotification(ctx, updateInfo)
+}
+
+func (tmcs *TelegramUpdatesCheckService) handleTwitchCancelStreamNotification(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	return tmcs.twitchCancelStreamNotification(ctx, updateInfo)
+}
+
+func (tmcs *TelegramUpdatesCheckService) handleTwitchFollowedNotification(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	return tmcs.twitchAddFollowedNotification(ctx, updateInfo)
+}
+
+func (tmcs *TelegramUpdatesCheckService) handleTwitchCancelFollowedNotification(ctx context.Context, updateInfo tgbotapi.Update) (interface{}, error) {
+	return tmcs.twitchCancelFollowedNotification(ctx, updateInfo)
+}
+
+func sendMsgToTelegram(_ context.Context, resp tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) error {
 	_, err := bot.Send(resp)
 	if err != nil {
-		logrus.Errorf("telegram send message error: %s", err.Error())
+		return fmt.Errorf("failed to send telegram message: %w", err)
 	}
+	return nil
+}
+
+func sendPhotoToTelegram(_ context.Context, resp tgbotapi.PhotoConfig, bot *tgbotapi.BotAPI) error {
+	_, err := bot.Send(resp)
+	if err != nil {
+		return fmt.Errorf("failed to send telegram photo: %w", err)
+	}
+	return nil
 }
 
 func (tmcs *TelegramUpdatesCheckService) SyncBg(ctx context.Context, syncInterval time.Duration) {
 	ticker := time.NewTicker(syncInterval)
 	defer ticker.Stop()
 
+	logrus.Infof("Starting background sync process: %s", telegramUpdatesCheckBGSync)
+
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("stoping bg %s process", telegramUpdatesCheckBGSync)
+			logrus.Infof("Stopping background sync process: %s", telegramUpdatesCheckBGSync)
 			return
 		case <-ticker.C:
-			logrus.Infof("started bg %s process", telegramUpdatesCheckBGSync)
-			err := tmcs.Sync(ctx)
-			if err != nil {
-				logrus.Info("could not check telegram updates")
+			logrus.Debugf("Starting background sync iteration: %s", telegramUpdatesCheckBGSync)
+
+			if err := tmcs.Sync(ctx); err != nil {
+				logrus.Errorf("Background sync failed: %v", err)
 				continue
 			}
-			logrus.Info("telegram updates check was complited")
+
+			logrus.Debugf("Background sync completed successfully: %s", telegramUpdatesCheckBGSync)
 		}
 	}
-
 }
 
 func validateText(text string) (string, bool) {
-
 	words := strings.Fields(text)
-
 	if len(words) != 1 || words[0] == "" {
 		return "", false
 	}
-
 	return words[0], true
 }

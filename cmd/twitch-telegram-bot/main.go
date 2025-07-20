@@ -39,7 +39,8 @@ const (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	err := godotenv.Load()
 	if err != nil {

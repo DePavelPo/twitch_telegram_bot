@@ -14,7 +14,6 @@ func (tmcs *TelegramUpdatesCheckService) twitchAddStreamNotification(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
 ) (msg tgbotapi.MessageConfig, err error) {
-
 	msg.ChatID = updateInfo.Message.Chat.ID
 	msg.ReplyToMessageID = updateInfo.Message.MessageID
 
@@ -23,7 +22,6 @@ func (tmcs *TelegramUpdatesCheckService) twitchAddStreamNotification(
 	userLogin, isValid := validateText(commandText)
 	if !isValid {
 		msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchStreamNotifi, twitchStreamNotifi)
-
 		return
 	}
 
@@ -32,12 +30,10 @@ func (tmcs *TelegramUpdatesCheckService) twitchAddStreamNotification(
 	err = tmcs.dbRepo.AddTwitchNotification(ctx, uint64(updateInfo.Message.Chat.ID), userLoginLowercase, models.NotificationByUser)
 	if err != nil {
 		msg.Text = somethingWrong
-
 		return msg, errors.Wrap(err, "AddTwitchNotification")
 	}
 
 	msg.Text = fmt.Sprintf("Request successfully accepted! This channel will now receive stream notifications from %s Twitch channel", userLogin)
-
 	return
 }
 
@@ -45,7 +41,6 @@ func (tmcs *TelegramUpdatesCheckService) twitchCancelStreamNotification(
 	ctx context.Context,
 	updateInfo tgbotapi.Update,
 ) (msg tgbotapi.MessageConfig, err error) {
-
 	msg.ChatID = updateInfo.Message.Chat.ID
 	msg.ReplyToMessageID = updateInfo.Message.MessageID
 
@@ -54,7 +49,6 @@ func (tmcs *TelegramUpdatesCheckService) twitchCancelStreamNotification(
 	userLogin, isValid := validateText(commandText)
 	if !isValid {
 		msg.Text = invalidReq + fmt.Sprintf(userCustomExampleText, twitchCancelStreamNotifi, twitchCancelStreamNotifi)
-
 		return
 	}
 
@@ -62,7 +56,6 @@ func (tmcs *TelegramUpdatesCheckService) twitchCancelStreamNotification(
 
 	err = tmcs.dbRepo.SetInactiveNotificationByType(ctx, uint64(updateInfo.Message.Chat.ID), userLogin, models.NotificationByUser)
 	if err != nil {
-
 		if err.Error() == "notification not found" {
 			msg.Text = "No requests for notifications were found for this channel. Perhaps the name is incorrectly indicated or such request was not created"
 
@@ -70,11 +63,9 @@ func (tmcs *TelegramUpdatesCheckService) twitchCancelStreamNotification(
 		}
 
 		msg.Text = somethingWrong
-
 		return msg, errors.Wrap(err, "SetInactiveNotificationByType")
 	}
 
 	msg.Text = "Notifications were disabled successfully"
-
 	return
 }
