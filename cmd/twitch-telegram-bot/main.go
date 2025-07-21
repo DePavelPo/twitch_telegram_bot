@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	fileClient "twitch_telegram_bot/internal/client/file"
@@ -27,7 +29,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
-	"github.com/joho/godotenv"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 
 	_ "github.com/lib/pq"
@@ -38,116 +40,141 @@ const (
 	prodENV  = "prod"
 )
 
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+type config struct {
+	APIAddr      string `envconfig:"API_ADDR" required:"true"`
+	DebugAddr    string `envconfig:"DEBUG_ADDR" required:"true"`
+	RedirectAddr string `envconfig:"REDIRECT_ADDR" required:"true"`
+	Env          string `envconfig:"CURRENT_ENV" required:"true"`
+	DBConn       string `envconfig:"DB_CONN" required:"true"`
+}
 
-	err := godotenv.Load()
+func loadConfig() (config, error) {
+	var cfg config
+	if err := envconfig.Process("", &cfg); err != nil {
+		logrus.WithError(err).Fatal("failed to load config")
+		return config{}, err
+	}
+	if cfg.APIAddr == "" || cfg.DebugAddr == "" || cfg.RedirectAddr == "" || cfg.Env == "" || cfg.DBConn == "" {
+		return config{}, envconfig.ErrInvalidSpecification
+	}
+	return cfg, nil
+}
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cfg, err := loadConfig()
 	if err != nil {
-		logrus.Fatal("Error loading .env file")
+		logrus.Fatalf("missing or invalid config: %v", err)
 	}
 
-	apiAddr, debugAddr, redirectAddr := os.Getenv("API_ADDR"), os.Getenv("DEBUG_ADDR"), os.Getenv("REDIRECT_ADDR")
-	env := os.Getenv("CURRENT_ENV")
-
 	var protocol string
-	switch env {
+	switch cfg.Env {
 	case localENV:
 		protocol = "http"
 	case prodENV:
 		protocol = "https"
 	default:
-		logrus.Fatalf("unknown env: %s", env)
+		logrus.Fatalf("unknown env: %s", cfg.Env)
 	}
 
-	db, err := sqlx.Connect("postgres", os.Getenv("DB_CONN"))
+	db, err := sqlx.Connect("postgres", cfg.DBConn)
 	if err != nil {
-		logrus.Fatalf("cannot connect to db: %v", err)
+		logrus.WithError(err).Fatal("cannot connect to db")
 	}
-
-	err = db.Ping()
-	if err != nil {
-		logrus.Fatalf("cannot ping db: %v", err)
+	if err := db.Ping(); err != nil {
+		logrus.WithError(err).Fatal("cannot ping db")
 	}
-
-	var (
-		telegaClient      = telegramClient.NewTelegramClient()
-		twitchOauthClient = twitchOauthClient.NewTwitchOauthClient(protocol, redirectAddr)
-		fClient           = fileClient.NewFileClient()
-	)
-
 	dbRepo := dbRepository.NewDBRepository(db)
+
+	// Initialize clients and services
+	telegaClient := telegramClient.NewTelegramClient()
+	twitchOauthClient := twitchOauthClient.NewTwitchOauthClient(protocol, cfg.RedirectAddr)
+	fClient := fileClient.NewFileClient()
 
 	tts, err := twitchTokenService.NewTwitchTokenService(dbRepo, twitchOauthClient)
 	if err != nil {
-		logrus.Fatalf("cannot init twitchTokenService: %v", err)
+		logrus.WithError(err).Fatal("cannot init twitchTokenService")
 	}
-	go tts.SyncBg(ctx, time.Minute*5)
+	go tts.SyncBg(ctx, 5*time.Minute)
 
 	twitchClient := twitchClient.NewTwitchClient(tts)
-
 	telegaService := telegramService.NewService(telegaClient)
 	twitchService := twitchService.NewService(twitchClient, twitchOauthClient)
 
 	tns, err := notificationService.NewTwitchNotificationService(dbRepo, twitchClient, twitchOauthClient)
 	if err != nil {
-		logrus.Fatalf("cannot init notificationService: %v", err)
+		logrus.WithError(err).Fatal("cannot init notificationService")
 	}
-	go tns.SyncBg(ctx, time.Minute*5)
+	go tns.SyncBg(ctx, 5*time.Minute)
 
-	tuas, err := twitchUserAuthservice.NewTwitchUserAuthorizationService(dbRepo, twitchOauthClient, protocol, redirectAddr)
+	tuas, err := twitchUserAuthservice.NewTwitchUserAuthorizationService(dbRepo, twitchOauthClient, protocol, cfg.RedirectAddr)
 	if err != nil {
-		logrus.Fatalf("cannot init twitchUserAuthservice: %v", err)
+		logrus.WithError(err).Fatal("cannot init twitchUserAuthservice")
 	}
-
 	tucs, err := teleUpdatesCheckService.NewTelegramUpdatesCheckService(twitchClient, fClient, dbRepo, tns, tuas, telegaService, twitchOauthClient)
 	if err != nil {
-		logrus.Fatalf("cannot init teleUpdatesCheckService: %v", err)
+		logrus.WithError(err).Fatal("cannot init teleUpdatesCheckService")
 	}
-	go tucs.SyncBg(ctx, time.Second*1)
+	go tucs.SyncBg(ctx, time.Second)
 
 	_ = telegramHandler.NewTelegramHandler(telegaService)
 	twitchHandler := twitchHandler.NewTwitchHandler(twitchService, tuas)
 
-	// api router
+	// Routers
 	apiRouter := mux.NewRouter()
-	apiRouter.HandleFunc("/api/user/token/set", twitchHandler.GetUserToken).Methods("POST").Schemes("HTTP")
-	// Configure CORS
+	apiRouter.HandleFunc("/api/user/token/set", twitchHandler.GetUserToken).Methods("POST").Schemes("http")
 	apiHandlerWithCORS := middleware.ConfigureCORS(apiRouter)
 
-	// admin router
 	debugRouter := mux.NewRouter()
-	debugRouter.HandleFunc("/admin/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("HTTP")
-	debugRouter.HandleFunc("/admin/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("HTTP")
+	debugRouter.HandleFunc("/admin/twitch/user", twitchHandler.GetUser).Methods("POST").Schemes("http")
+	debugRouter.HandleFunc("/admin/twitch/stream", twitchHandler.GetActiveStreamInfoByUser).Methods("POST").Schemes("http")
 
 	logrus.Info("server start...")
 
-	wg := new(sync.WaitGroup)
+	debugSrv := &http.Server{
+		Handler:      debugRouter,
+		Addr:         cfg.DebugAddr,
+		WriteTimeout: 5 * time.Second,
+		ReadTimeout:  5 * time.Second,
+	}
+	apiSrv := &http.Server{
+		Handler:      apiHandlerWithCORS,
+		Addr:         cfg.APIAddr,
+		WriteTimeout: 5 * time.Second,
+		ReadTimeout:  5 * time.Second,
+	}
 
+	wg := new(sync.WaitGroup)
 	wg.Add(2)
 	go func() {
-		srv := &http.Server{
-			Handler:      debugRouter,
-			Addr:         debugAddr,
-			WriteTimeout: 5 * time.Second,
-			ReadTimeout:  5 * time.Second,
+		defer wg.Done()
+		if err := debugSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logrus.WithError(err).Fatal("debug server error")
 		}
-
-		logrus.Fatal(srv.ListenAndServe())
-		wg.Done()
 	}()
 
 	go func() {
-		srv := &http.Server{
-			Handler:      apiHandlerWithCORS,
-			Addr:         apiAddr,
-			WriteTimeout: 5 * time.Second,
-			ReadTimeout:  5 * time.Second,
+		defer wg.Done()
+		if err := apiSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logrus.WithError(err).Fatal("api server error")
 		}
-
-		logrus.Fatalf("can't serve: %v", srv.ListenAndServe())
-		wg.Done()
 	}()
 
+	<-ctx.Done()
+	logrus.Info("shutting down servers...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := debugSrv.Shutdown(shutdownCtx); err != nil {
+		logrus.WithError(err).Fatal("debug server shutdown error")
+	}
+	if err := apiSrv.Shutdown(shutdownCtx); err != nil {
+		logrus.WithError(err).Fatal("api server shutdown error")
+	}
+
 	wg.Wait()
+	logrus.Info("servers stopped successfully")
 }

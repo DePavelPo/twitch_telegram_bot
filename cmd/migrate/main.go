@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"flag"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -15,52 +16,46 @@ import (
 const migrationDir = "./db/migrations"
 
 func main() {
+	// Load .env if present, don't fail if missing
+	_ = godotenv.Load()
 
-	err := godotenv.Load()
-	if err != nil {
-		logrus.Fatal("Error loading .env file")
+	var (
+		downFlag = flag.Bool("down", false, "Run migrations down instead of up")
+		dbConn   = os.Getenv("DB_CONN")
+	)
+	flag.Parse()
+
+	if dbConn == "" {
+		logrus.Fatal("DB_CONN environment variable is required")
 	}
 
-	migrateDown := false
-
-	for _, arg := range os.Args {
-		if arg == "--down" {
-			migrateDown = true
-		}
+	if err := runMigrations("postgres", dbConn, *downFlag); err != nil {
+		logrus.Fatalf("Migration failed: %+v", err)
 	}
-
-	err = migrate("postgres", os.Getenv("DB_CONN"), migrateDown)
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
 }
 
-func migrate(dialect string, creds string, migrateDown bool) error {
+func runMigrations(dialect, creds string, migrateDown bool) error {
 	db, err := sql.Open(dialect, creds)
 	if err != nil {
-		return errors.Errorf("cannot open postgres db connection: %v", err)
+		return errors.Errorf("cannot open %s db connection: %v", dialect, err)
 	}
-
 	defer db.Close()
 
-	err = goose.SetDialect(dialect)
-	if err != nil {
+	if err := goose.SetDialect(dialect); err != nil {
 		return errors.Errorf("cannot set %s dialect: %v", dialect, err)
 	}
 
 	if migrateDown {
-		err = goose.Down(db, migrationDir)
-		if err != nil {
+		if err := goose.Down(db, migrationDir); err != nil {
 			return errors.Errorf("cannot down %s migrations: %v", dialect, err)
 		}
+		logrus.Info("Migrations rolled back successfully")
 		return nil
 	}
 
-	err = goose.Up(db, migrationDir, goose.WithAllowMissing())
-	if err != nil {
+	if err := goose.Up(db, migrationDir, goose.WithAllowMissing()); err != nil {
 		return errors.Errorf("cannot up %s migrations: %v", dialect, err)
 	}
+	logrus.Info("Migrations applied successfully")
 	return nil
-
 }

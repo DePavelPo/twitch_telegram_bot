@@ -15,4 +15,4 @@ migrate:
 
 .PHONY: migrate-down
 migrate-down:
-	go run cmd/migrate/main.go --down
+	go run cmd/migrate/main.go -down
